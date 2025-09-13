@@ -56,13 +56,16 @@
   "restoreFailed": "復元できませんでした",
   "subscriptionNote": "サブスクリプションのみ対応（単発購入は非対応）。いつでもキャンセル可能。",
   "upgradeTagline": "快適な学習体験をアップグレード",
+  "tokenLimitTitle": "上限に達しました",
+  "tokenLimitMessage": "無料プランの上限に達しました。プレミアムに登録すると広告なし＆音声生成は無制限でご利用いただけます。",
+  "goPremium": "プレミアムに登録",
 
   "appSettings": "アプリ設定",
   "defaultVoiceSettings": "デフォルトの音声設定",
   "labelLanguage": "言語",
   "labelVoice": "ボイス",
   "languageModalTitle": "言語設定",
-  "review": "レビューを書く",
+  "review": "アプリを評価する",
 
   "lang_en_US": "英語 (米国)",
   "lang_en_GB": "英語 (英国)",

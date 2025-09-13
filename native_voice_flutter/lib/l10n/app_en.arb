@@ -56,13 +56,16 @@
   "restoreFailed": "Could not restore",
   "subscriptionNote": "Subscription only (no one-time purchase). Cancel anytime.",
   "upgradeTagline": "Upgrade your learning experience comfortably",
+  "tokenLimitTitle": "Limit reached",
+  "tokenLimitMessage": "You've reached the free plan limit. Upgrade to Premium for ad-free and unlimited audio generation.",
+  "goPremium": "Go Premium",
 
   "appSettings": "App Settings",
   "defaultVoiceSettings": "Default voice settings",
   "labelLanguage": "Language",
   "labelVoice": "Voice",
   "languageModalTitle": "Voice Settings",
-  "review": "Write a Review",
+  "review": "Rate the App",
 
   "lang_en_US": "English (US)",
   "lang_en_GB": "English (UK)",

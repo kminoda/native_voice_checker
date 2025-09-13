@@ -13,6 +13,9 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
 import 'package:flutter/services.dart';
+import 'package:native_voice_flutter/services/premium_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:native_voice_flutter/screens/premium_bottom_sheet.dart';
 
 class TextSessionScreen extends StatefulWidget {
   const TextSessionScreen({super.key});
@@ -23,6 +26,7 @@ class TextSessionScreen extends StatefulWidget {
 
 class _TextSessionScreenState extends State<TextSessionScreen> {
   final TextEditingController _textController = TextEditingController();
+  final FocusNode _textFocusNode = FocusNode();
   bool _hasAudio = false;
   String? _audioPath;
   String? _currentSessionId;
@@ -37,6 +41,7 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
   InterstitialAd? _interstitialAd;
   bool _isLoadingAd = false;
   final Random _rand = Random();
+  final PremiumService _premium = PremiumService.instance;
   // Ad unit IDs (prod and Google-provided test unit)
   static const String _interstitialUnitIdProd = 'ca-app-pub-5083707284208912/4312090887';
   static const String _interstitialUnitIdTest = 'ca-app-pub-3940256099942544/4411468910';
@@ -46,7 +51,7 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
   void initState() {
     super.initState();
     _loadDefaults();
-    // Preload an interstitial ad
+    // Preload an interstitial ad only if not premium
     _loadInterstitial();
     // Ensure no looping
     _player.setLoopMode(LoopMode.off);
@@ -58,9 +63,29 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
         if (mounted) setState(() {});
       }
     });
+    // Ensure keyboard does not automatically appear on screen open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+      _textFocusNode.unfocus();
+    });
+    // React to premium status changes (dispose ads if user becomes premium)
+    _premium.addListener(_onPremiumUpdate);
+  }
+
+  void _onPremiumUpdate() {
+    if (_premium.isPremium) {
+      try {
+        _interstitialAd?.dispose();
+      } catch (_) {}
+      _interstitialAd = null;
+      _isLoadingAd = false;
+      if (mounted) setState(() {});
+    }
   }
 
   void _loadInterstitial() {
+    if (_premium.isPremium) return; // No ads for premium users
     if (_isLoadingAd || _interstitialAd != null) return;
     _isLoadingAd = true;
     InterstitialAd.load(
@@ -125,8 +150,8 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
           return;
         }
       }
-      // Randomly show an interstitial before generation (~33%)
-      final showAd = _rand.nextInt(3) == 0;
+      // Randomly show an interstitial before generation (~33%), except for premium
+      final showAd = !_premium.isPremium && _rand.nextInt(3) == 0;
       if (showAd && _interstitialAd != null) {
         _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
           onAdShowedFullScreenContent: (ad) => debugPrint('[AD] Interstitial shown'),
@@ -178,12 +203,47 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
       _scheduleSaveSession();
     } catch (e) {
       debugPrint('[UI][ERROR] Generation failed in _performGeneration: $e');
+      // Show premium upsell when free token limit is exceeded
+      if (e is FirebaseFunctionsException && e.code == 'resource-exhausted') {
+        if (!mounted) return;
+        await _showTokenLimitDialog();
+      }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
     }
   }
 
+  Future<void> _showTokenLimitDialog() async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text(l10n.tokenLimitTitle),
+        content: Text(l10n.tokenLimitMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.close),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              HapticFeedback.selectionClick();
+              await showPremiumBottomSheet(context);
+            },
+            child: Text(l10n.goPremium),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _onSelectSession(String id, String text) async {
+    // Avoid focusing the editor when switching sessions
+    FocusScope.of(context).unfocus();
+    _textFocusNode.unfocus();
     await _maybeDeleteCurrentIfEmpty();
     setState(() {
       _currentSessionId = id;
@@ -345,7 +405,9 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
     try { _interstitialAd?.dispose(); } catch (_) {}
     _saveDebounce?.cancel();
     _player.dispose();
+    _textFocusNode.dispose();
     _textController.dispose();
+    _premium.removeListener(_onPremiumUpdate);
     super.dispose();
   }
 
@@ -355,6 +417,12 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
       // Dim the chat area slightly when the drawer (menu bar) is open
       drawerScrimColor: Colors.black26,
       drawer: MenuDrawer(onSelectSession: _onSelectSession),
+      onDrawerChanged: (isOpened) {
+        if (!isOpened) {
+          FocusScope.of(context).unfocus();
+          _textFocusNode.unfocus();
+        }
+      },
       appBar: AppBar(
         leading: Builder(
           builder: (context) => IconButton(
@@ -386,6 +454,8 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
               Expanded(
                 child: TextField(
                   controller: _textController,
+                  focusNode: _textFocusNode,
+                  autofocus: false,
                   maxLines: null,
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,

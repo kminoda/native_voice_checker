@@ -368,6 +368,24 @@ abstract class AppLocalizations {
   /// **'Upgrade your learning experience comfortably'**
   String get upgradeTagline;
 
+  /// No description provided for @tokenLimitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Limit reached'**
+  String get tokenLimitTitle;
+
+  /// No description provided for @tokenLimitMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve reached the free plan limit. Upgrade to Premium for ad-free and unlimited audio generation.'**
+  String get tokenLimitMessage;
+
+  /// No description provided for @goPremium.
+  ///
+  /// In en, this message translates to:
+  /// **'Go Premium'**
+  String get goPremium;
+
   /// No description provided for @appSettings.
   ///
   /// In en, this message translates to:
@@ -401,7 +419,7 @@ abstract class AppLocalizations {
   /// No description provided for @review.
   ///
   /// In en, this message translates to:
-  /// **'Write a Review'**
+  /// **'Rate the App'**
   String get review;
 
   /// No description provided for @lang_en_US.

@@ -152,6 +152,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get upgradeTagline => 'Upgrade your learning experience comfortably';
 
   @override
+  String get tokenLimitTitle => 'Limit reached';
+
+  @override
+  String get tokenLimitMessage =>
+      'You\'ve reached the free plan limit. Upgrade to Premium for ad-free and unlimited audio generation.';
+
+  @override
+  String get goPremium => 'Go Premium';
+
+  @override
   String get appSettings => 'App Settings';
 
   @override
@@ -167,7 +177,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageModalTitle => 'Voice Settings';
 
   @override
-  String get review => 'Write a Review';
+  String get review => 'Rate the App';
 
   @override
   String get lang_en_US => 'English (US)';

@@ -23,7 +23,10 @@ class _MenuDrawerState extends State<MenuDrawer> {
   final TextEditingController _searchController = TextEditingController();
   final SessionStore _store = SessionStore();
   String _query = '';
-  final Uri _reviewUri = Uri.parse('https://example.com/app-review');
+  // Rating destinations
+  final Uri _reviewFormUri = Uri.parse('https://forms.gle/d6kMNCHZ9hfG9saF7');
+  // App Store review deep link (Japan store)
+  final Uri _appStoreReviewUri = Uri.parse('https://apps.apple.com/jp/app/id6752515948?action=write-review');
   final Uri _ankiAppUri = Uri.parse('https://apps.apple.com/jp/app/id6740526880');
   final PremiumService _premium = PremiumService.instance;
 
@@ -200,12 +203,22 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             },
                           ),
                           ListTile(
-                            leading: const Icon(Icons.rate_review_outlined),
+                            leading: const Icon(Icons.star_border_rounded),
                             title: Text(AppLocalizations.of(context)!.review),
+                            subtitle: Text(
+                              Localizations.localeOf(context).languageCode == 'ja'
+                                  ? 'レビューを書いて応援する'
+                                  : 'Support us with a review',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
                             onTap: () async {
                               HapticFeedback.selectionClick();
+                              final rating = await _showRatingDialog();
+                              if (rating == null) return;
+                              final Uri dest = rating <= 3 ? _reviewFormUri : _appStoreReviewUri;
                               try {
-                                if (!await launchUrl(_reviewUri, mode: LaunchMode.externalApplication)) {
+                                final ok = await launchUrl(dest, mode: LaunchMode.externalApplication);
+                                if (!ok) {
                                   // ignore: use_build_context_synchronously
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
@@ -242,6 +255,57 @@ class _MenuDrawerState extends State<MenuDrawer> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<int?> _showRatingDialog() async {
+    int selected = 0;
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        final isJa = Localizations.localeOf(context).languageCode == 'ja';
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            title: Text(
+              isJa ? 'アプリを評価する' : 'Rate the App',
+            ),
+            content: SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (i) {
+                      final idx = i + 1;
+                      final filled = selected >= idx;
+                      return IconButton(
+                        iconSize: 32,
+                        onPressed: () {
+                          setState(() => selected = idx);
+                          Navigator.of(context).pop(idx);
+                        },
+                        icon: Icon(
+                          filled ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: filled ? Colors.amber : Colors.white70,
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(AppLocalizations.of(context)!.cancel),
+              ),
+              // No explicit submit; tapping a star acts immediately.
+            ],
+          ),
+        );
+      },
     );
   }
 
