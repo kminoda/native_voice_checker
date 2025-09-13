@@ -1,0 +1,1283 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:ui';
+import 'dart:math' as math;
+import '../services/subscription_service.dart';
+import '../services/connection_service.dart';
+import '../services/notification_service.dart';
+import '../localization/app_localization.dart';
+
+class PremiumBottomSheet extends StatefulWidget {
+  const PremiumBottomSheet({Key? key}) : super(key: key);
+
+  @override
+  State<PremiumBottomSheet> createState() => _PremiumBottomSheetState();
+}
+
+class _PremiumBottomSheetState extends State<PremiumBottomSheet> with SingleTickerProviderStateMixin {
+  final SubscriptionService _subscriptionService = SubscriptionService();
+  final ConnectionService _connectionService = ConnectionService();
+
+  bool _isLoading = false;
+  SubscriptionStatus _subscriptionStatus = SubscriptionStatus.unknown;
+  Map<SubscriptionPlan, String?> _planPrices = {
+    SubscriptionPlan.monthly: null,
+    SubscriptionPlan.sixMonth: null,
+  };
+  bool _isPriceLoaded = false;
+  bool _isEligibleForTrial = false;
+  bool _useFreeTrial = false;
+  SubscriptionPlan _selectedPlan = SubscriptionPlan.monthly;
+  String? _savingsText;
+  // Offerings/price load control to avoid duplicate calls
+  bool _offeringsRequested = false;
+  
+  late AnimationController _animationController;
+  late Animation<double> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    )..forward();
+    
+    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic)
+    );
+    
+    _initializeSheet();
+    _subscriptionService.subscriptionStatusStream.listen((status) {
+      if (mounted) setState(() => _subscriptionStatus = status);
+      // When RevenueCat finishes initializing, load offerings/prices once
+      if (!_isPriceLoaded && !_offeringsRequested && _subscriptionService.isInitialized) {
+        _offeringsRequested = true;
+        _loadOfferingInfo();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeSheet() async {
+    setState(() => _isLoading = true);
+    await _checkSubscriptionStatus();
+    // Avoid calling RevenueCat SDK before it’s initialized (can crash on iOS)
+    if (_subscriptionService.isInitialized) {
+      _offeringsRequested = true;
+      await _loadOfferingInfo();
+    } else {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadOfferingInfo() async {
+    try {
+      // Guard: do not touch RevenueCat until initialized
+      if (!_subscriptionService.isInitialized) return;
+      if (!await _connectionService.checkInternetConnection()) return;
+      
+      // 価格情報を取得
+      final prices = await _subscriptionService.getPlanPrices();
+      
+      // 無料トライアル判定（月額プランで確認）
+      bool eligible = false;
+      // Safe to call Purchases API here since SubscriptionService is initialized
+      final offerings = await Purchases.getOfferings();
+      final monthly = offerings.current?.monthly;
+      if (monthly != null) {
+        final intro = monthly.storeProduct.introductoryPrice;
+        if (intro != null) {
+          final info = await Purchases.getCustomerInfo();
+          eligible = intro != null && !info.allPurchasedProductIdentifiers.contains(monthly.storeProduct.identifier);
+        }
+      }
+      
+      setState(() {
+        _planPrices = prices;
+        _isEligibleForTrial = eligible;
+        _useFreeTrial = eligible; // デフォルトは無料体験を適用
+        _isPriceLoaded = true;
+        _savingsText = _calculateSavings(prices);
+      });
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  String? _calculateSavings(Map<SubscriptionPlan, String?> prices) {
+    final monthlyPrice = prices[SubscriptionPlan.monthly];
+    final sixMonthPrice = prices[SubscriptionPlan.sixMonth];
+    
+    if (monthlyPrice == null || sixMonthPrice == null) {
+      // ローディング中はバッジを表示しない
+      return null;
+    }
+    
+    try {
+      // 価格文字列から数値を抽出
+      final monthlyValue = _extractPriceValue(monthlyPrice);
+      final sixMonthValue = _extractPriceValue(sixMonthPrice);
+      
+      if (monthlyValue != null && sixMonthValue != null) {
+        final monthlyCostForSixMonths = monthlyValue * 6;
+        final savings = monthlyCostForSixMonths - sixMonthValue;
+        
+        if (monthlyPrice.contains('¥')) {
+          // 日本円
+          final roundedSavings = (savings / 10).round() * 10; // 10円単位で丸める
+          return '¥${roundedSavings}だけお得';
+        } else if (monthlyPrice.contains('\$')) {
+          // USD
+          final roundedSavings = savings.round(); // 1ドル単位で丸める
+          return 'Save \$${roundedSavings}';
+        }
+      }
+    } catch (e) {
+      debugPrint('節約額計算エラー: $e');
+    }
+    
+    return null;
+  }
+
+  double? _extractPriceValue(String priceString) {
+    // ¥1,400 -> 1400, $14.99 -> 14.99 のように抽出
+    final cleanString = priceString.replaceAll(RegExp(r'[¥\$,]'), '');
+    return double.tryParse(cleanString);
+  }
+
+  Future<void> _checkSubscriptionStatus() async {
+    try {
+      if (!await _connectionService.checkInternetConnection()) {
+        setState(() { _subscriptionStatus = SubscriptionStatus.unknown; _isLoading = false; });
+        return;
+      }
+      await _subscriptionService.updateCurrentUser();
+      final isPremium = await _subscriptionService.isPremium();
+      setState(() {
+        _subscriptionStatus = isPremium ? SubscriptionStatus.premium : SubscriptionStatus.free;
+        _isLoading = false;
+      });
+    } catch (_) { if (mounted) setState(() { _subscriptionStatus = SubscriptionStatus.unknown; _isLoading = false; }); }
+  }
+
+  Future<void> _purchasePremium() async {
+    HapticFeedback.mediumImpact();
+    if (!await _connectionService.checkInternetConnection()) {
+      NotificationService().showWarning(context, 'Internet connection required for purchase');
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      final success = await _subscriptionService.purchasePremium(plan: _selectedPlan);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (success) {
+          NotificationService().showSuccess(context, 'Premium upgrade successful!');
+          Navigator.pop(context); // Close bottom sheet on success
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        NotificationService().showError(context, 'Error starting purchase: $e', errorCode: '0106');
+      }
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    final loc = AppLocalizations.of(context);
+    HapticFeedback.lightImpact();
+    if (!await _connectionService.checkInternetConnection()) {
+      NotificationService().showWarning(context, loc.translate('premium/internet_connection_required_to_restore_purchases'));
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      final success = await _subscriptionService.restorePurchases();
+      await _checkSubscriptionStatus();
+      if (mounted) {
+        if (success) NotificationService().showSuccess(context, loc.translate('premium/purchases_restored_successfully'));
+        else NotificationService().showError(context, loc.translate('premium/no_previous_purchases_found'), errorCode: '1007');
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    else NotificationService().showError(context, 'Cannot open $url');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isPremium = _subscriptionStatus == SubscriptionStatus.premium;
+    final loc = AppLocalizations.of(context);
+    
+    // Custom theme colors for premium screen
+    final primaryGradientStart = theme.primaryColor;
+    final primaryGradientEnd = HSLColor.fromColor(theme.primaryColor).withLightness(0.3).toColor();
+    final secondaryAccentColor = HSLColor.fromColor(theme.primaryColor).withLightness(0.8).withSaturation(0.9).toColor();
+    
+    return AnimatedBuilder(
+      animation: _slideAnimation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _slideAnimation.value * MediaQuery.of(context).size.height * 0.5),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.9,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+              ),
+              child: Stack(
+                      children: [
+                        // メインコンテンツ
+                        SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            children: [
+                              // ヘッダーセクション
+                              _buildHeaderSection(primaryGradientStart, primaryGradientEnd, isPremium, loc),
+                              
+                              // プレミアム機能リスト
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      loc.translate('premium/unlock_all_features_title'),
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ..._buildCompactFeatureList(theme, isPremium, loc),
+                                  ],
+                                ),
+                              ),
+
+                              // 価格・トライアルセクション
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                child: _buildPricingCard(theme, isPremium, loc, secondaryAccentColor),
+                              ),
+
+                              // フッターノート
+                              Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      loc.translate('premium/payment_will_be_charged'),
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        _buildFooterButton(
+                                          onPressed: () => _openUrl('https://oto-anki.com/privacy_policy'),
+                                          text: loc.translate('premium/privacy_policy'),
+                                          theme: theme,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        _buildFooterButton(
+                                          onPressed: () => _openUrl('https://oto-anki.com/terms_of_service'),
+                                          text: loc.translate('premium/terms_of_service'),
+                                          theme: theme,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 32),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        // Handle bar - ヘッダーの上に重ねる
+                        Positioned(
+                          top: 8,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeaderSection(Color primaryGradientStart, Color primaryGradientEnd, bool isPremium, AppLocalizations loc) {
+    return Container(
+      height: 240,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryGradientStart, primaryGradientEnd],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // 背景画像
+          Positioned.fill(
+            child: ShaderMask(
+              shaderCallback: (rect) {
+                return LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black, Colors.transparent],
+                ).createShader(Rect.fromLTRB(0, 0, rect.width, rect.height));
+              },
+              blendMode: BlendMode.dstIn,
+              child: Image.asset(
+                'assets/premium_background.jpg',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          // オーバーレイグラデーション
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.1),
+                    Colors.black.withOpacity(0.5),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ヘッダーコンテンツ
+          Positioned(
+            bottom: 24,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Premium バッジ - 条件に応じて表示を変更
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withOpacity(0.4), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _isEligibleForTrial && !isPremium 
+                              ? Icons.stars 
+                              : Icons.diamond_outlined, 
+                          color: _isEligibleForTrial && !isPremium 
+                              ? Colors.amber 
+                              : Colors.white, 
+                          size: 20
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isEligibleForTrial && !isPremium
+                              ? loc.translate('premium/free_trial_available')
+                              : 'OtoAnki Premium',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // メインタイトル
+                  Text(
+                    isPremium
+                        ? loc.translate('premium/enjoy_premium_features')
+                        : loc.translate('premium/upgrade_to_premium'),
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      height: 1.2,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black45,
+                          offset: Offset(0, 2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // サブタイトル
+                  Text(
+                    isPremium
+                        ? loc.translate('premium/premium_active')
+                        : loc.translate('premium/unlock_all_features'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black45,
+                          offset: Offset(0, 1),
+                          blurRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildPlanSegmentedControl(ThemeData theme, AppLocalizations loc) {
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPlan = SubscriptionPlan.monthly;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: _selectedPlan == SubscriptionPlan.monthly
+                      ? Colors.white
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: _selectedPlan == SubscriptionPlan.monthly
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Center(
+                  child: Text(
+                    loc.translate('premium/monthly'),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _selectedPlan == SubscriptionPlan.monthly
+                          ? theme.primaryColor
+                          : Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 24,
+            color: Colors.white.withOpacity(0.3),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPlan = SubscriptionPlan.sixMonth;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: _selectedPlan == SubscriptionPlan.sixMonth
+                      ? Colors.white
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: _selectedPlan == SubscriptionPlan.sixMonth
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Center(
+                  child: Text(
+                    loc.translate('premium/six_months'),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _selectedPlan == SubscriptionPlan.sixMonth
+                          ? theme.primaryColor
+                          : Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildCompactFeatureList(ThemeData theme, bool isPremium, AppLocalizations loc) {
+    final features = [
+      _CompactFeature(
+        icon: Icons.headphones,
+        text: loc.translate('premium/compact_background_audio'),
+      ),
+      _CompactFeature(
+        icon: Icons.tune,
+        text: loc.translate('premium/compact_listening_customization'),
+      ),
+      _CompactFeature(
+        icon: Icons.block,
+        text: loc.translate('premium/compact_ad_free'),
+      ),
+      _CompactFeature(
+        icon: Icons.all_inclusive,
+        text: loc.translate('premium/compact_unlimited_features'),
+      ),
+    ];
+    
+    return features
+        .map((feature) => _buildCompactFeatureItem(feature, theme, isPremium))
+        .toList();
+  }
+
+  Widget _buildCompactFeatureItem(_CompactFeature feature, ThemeData theme, bool isPremium) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          // Small icon
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              feature.icon,
+              color: theme.primaryColor,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // Feature text
+          Expanded(
+            child: Text(
+              feature.text,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          
+          // Check mark
+          Icon(
+            isPremium ? Icons.check_circle : Icons.check_circle_outline,
+            color: isPremium ? Colors.green : theme.primaryColor,
+            size: 20,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPricingCard(ThemeData theme, bool isPremium, AppLocalizations loc, Color secondaryAccentColor) {
+    if (isPremium) {
+      return _buildPremiumActiveCard(theme, loc);
+    }
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          // トライアルバッジ
+          if (_isEligibleForTrial)
+            _buildTrialBadge(theme, loc),
+          
+          if (_isEligibleForTrial) ...[
+            const SizedBox(height: 12),
+            _buildFreeTrialToggle(theme, loc),
+            const SizedBox(height: 8),
+          ],
+          
+          // 2つのプランを並べて表示
+          _buildSideBySidePricingCards(theme, loc),
+          
+          const SizedBox(height: 12),
+          
+          // アクションボタン
+          SizedBox(
+            width: double.infinity,
+            child: _buildUpgradeButton(theme, loc),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // 購入の復元
+          Center(
+            child: TextButton(
+              onPressed: _restorePurchases,
+              style: TextButton.styleFrom(
+                foregroundColor: theme.primaryColor,
+              ),
+              child: Text(
+                loc.translate('premium/restore_purchases'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumActiveCard(ThemeData theme, AppLocalizations loc) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            HSLColor.fromColor(theme.primaryColor).withLightness(0.6).toColor(),
+            HSLColor.fromColor(theme.primaryColor).withLightness(0.5).toColor(),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: theme.primaryColor.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                loc.translate('premium/already_premium'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideBySidePricingCards(ThemeData theme, AppLocalizations loc) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Row(
+          children: [
+            // 1ヶ月プラン
+            Expanded(
+              child: _buildPlanCard(
+                theme,
+                loc,
+                SubscriptionPlan.monthly,
+                loc.translate('premium/monthly'),
+                _planPrices[SubscriptionPlan.monthly],
+                _planPrices[SubscriptionPlan.monthly] != null
+                    ? '${_planPrices[SubscriptionPlan.monthly]} / month'
+                    : null,
+                false,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // 6ヶ月プラン
+            Expanded(
+              child: _buildPlanCard(
+                theme,
+                loc,
+                SubscriptionPlan.sixMonth,
+                loc.translate('premium/six_months'),
+                _planPrices[SubscriptionPlan.sixMonth],
+                _calculateMonthlyEquivalent(),
+                true,
+              ),
+            ),
+          ],
+        ),
+        
+        // 節約バッジ（6ヶ月プランの上に）
+        if (_savingsText != null)
+          Positioned(
+            top: -8,
+            right: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade500,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                _calculateSavingsPercentage(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPlanCard(
+    ThemeData theme,
+    AppLocalizations loc,
+    SubscriptionPlan plan,
+    String title,
+    String? price,
+    String? monthlyEquivalent,
+    bool showStrikethrough,
+  ) {
+    final isSelected = _selectedPlan == plan;
+    final isMonthly = plan == SubscriptionPlan.monthly;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedPlan = plan;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? theme.primaryColor : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected 
+                  ? theme.primaryColor.withOpacity(0.2)
+                  : Colors.grey.withOpacity(0.1),
+              blurRadius: isSelected ? 8 : 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // プラン名
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? theme.primaryColor : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // メイン価格（ローディング時はスピナー）
+            price != null
+                ? Text(
+                    price,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? theme.primaryColor : Colors.black87,
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Center(
+                      child: LoadingBar(
+                        width: 80,
+                        height: 8,
+                        baseColor: Colors.grey.shade300,
+                        highlightColor: isSelected ? theme.primaryColor.withOpacity(0.6) : Colors.grey.shade600,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+            
+            // 取り消し線付き価格エリア（高さを統一するため常に表示）
+            SizedBox(
+              height: 18,
+              child: showStrikethrough
+                  ? (() {
+                      final strike = _calculateSixMonthFromMonthly();
+                      if (strike != null) {
+                        return Text(
+                          strike,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        );
+                      }
+                      return Center(
+                        child: LoadingBar(
+                          width: 60,
+                          height: 6,
+                          baseColor: Colors.grey.shade300,
+                          highlightColor: Colors.grey.shade600,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      );
+                    })()
+                  : const SizedBox.shrink(),
+            ),
+            
+            const SizedBox(height: 8),
+            Container(
+              height: 1,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 8),
+            
+            // 月あたり価格（ローディング時はスピナー）
+            monthlyEquivalent != null
+                ? Text(
+                    monthlyEquivalent,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isSelected ? theme.primaryColor : Colors.black54,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  )
+                : Center(
+                    child: LoadingBar(
+                      width: 80,
+                      height: 6,
+                      baseColor: Colors.grey.shade300,
+                      highlightColor: isSelected ? theme.primaryColor.withOpacity(0.6) : Colors.grey.shade600,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _calculateMonthlyEquivalent() {
+    final sixMonthPrice = _planPrices[SubscriptionPlan.sixMonth];
+    if (sixMonthPrice == null) return null;
+    final price = _extractPriceValue(sixMonthPrice);
+    
+    if (price != null) {
+      final monthlyEquivalent = price / 6;
+      if (sixMonthPrice.contains('¥')) {
+        return '¥${monthlyEquivalent.round()} / month';
+      } else if (sixMonthPrice.contains('\$')) {
+        return '\$${(monthlyEquivalent * 100).round() / 100} / month';
+      }
+    }
+    return null; // ローディング時や解析失敗時
+  }
+
+  String _calculateSavingsPercentage() {
+    final monthlyPrice = _planPrices[SubscriptionPlan.monthly];
+    final sixMonthPrice = _planPrices[SubscriptionPlan.sixMonth];
+    
+    if (monthlyPrice != null && sixMonthPrice != null) {
+      final monthlyValue = _extractPriceValue(monthlyPrice);
+      final sixMonthValue = _extractPriceValue(sixMonthPrice);
+      
+      if (monthlyValue != null && sixMonthValue != null) {
+        final monthlyCostForSix = monthlyValue * 6;
+        final savingsPercentage = ((monthlyCostForSix - sixMonthValue) / monthlyCostForSix * 100).round();
+        return 'Save $savingsPercentage%';
+      }
+    }
+    
+    // フォールバック（安全側で固定文言）
+    return 'Save';
+  }
+
+  String? _calculateSixMonthFromMonthly() {
+    // 月額価格から6ヶ月分（比較用の取り消し線価格）を算出
+    final monthlyPrice = _planPrices[SubscriptionPlan.monthly];
+    if (monthlyPrice == null) return null;
+    final monthlyValue = _extractPriceValue(monthlyPrice);
+    if (monthlyValue == null) return null;
+
+    final sixMonthValue = monthlyValue * 6;
+    if (monthlyPrice.contains('¥')) {
+      return '¥${_formatWithCommas(sixMonthValue.round())}';
+    } else if (monthlyPrice.contains('\$')) {
+      final twoDecimal = (sixMonthValue * 100).round() / 100;
+      return '\$${twoDecimal.toString()}';
+    }
+    return null;
+  }
+
+  String _formatWithCommas(int value) {
+    final s = value.toString();
+    final regex = RegExp(r'(\d)(?=(\d{3})+(?!\d))');
+    return s.replaceAllMapped(regex, (Match m) => "${m[1]},");
+  }
+  
+  Widget _buildTrialBadge(ThemeData theme, AppLocalizations loc) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.stars,
+            color: Colors.amber,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            loc.translate('premium/free_trial_available'),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: theme.primaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+    
+  Widget _buildUpgradeButton(ThemeData theme, AppLocalizations loc) {
+    final accent = HSLColor.fromColor(theme.primaryColor)
+        .withLightness(0.8)
+        .withSaturation(0.9)
+        .toColor();
+
+    return ElevatedButton(
+      onPressed: _isLoading ? null : _purchasePremium,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        shadowColor: theme.primaryColor.withOpacity(0.4),
+        disabledBackgroundColor: theme.primaryColor.withOpacity(0.7),
+        disabledForegroundColor: Colors.white.withOpacity(0.7),
+      ),
+      child: _isLoading
+          ? SizedBox(
+              height: 20,
+              child: Center(
+                child: LoadingBar(
+                  width: 80,
+                  height: 6,
+                  baseColor: Colors.white.withOpacity(0.4),
+                  highlightColor: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_isEligibleForTrial && _useFreeTrial)
+                  const Icon(Icons.rocket_launch, size: 20, color: Colors.white)
+                else
+                  const Icon(Icons.diamond_outlined, size: 20, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  (_isEligibleForTrial && _useFreeTrial)
+                    ? loc.translate('premium/start_free_trial')
+                    : loc.translate('premium/purchase_now'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildFreeTrialToggle(ThemeData theme, AppLocalizations loc) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.local_offer, color: theme.primaryColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              loc.translate('premium/enable_free_trial_toggle'),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Switch.adaptive(
+            value: _useFreeTrial,
+            activeColor: theme.primaryColor,
+            onChanged: _isEligibleForTrial
+                ? (v) => setState(() => _useFreeTrial = v)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooterButton({
+    required VoidCallback onPressed,
+    required String text,
+    required ThemeData theme,
+  }) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: theme.primaryColor.withOpacity(0.8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.primaryColor.withOpacity(0.3)),
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+// 価格カード用のキラキラエフェクト
+class SparklesPainter extends CustomPainter {
+  final Color color;
+  
+  SparklesPainter({required this.color});
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.6)
+      ..style = PaintingStyle.fill;
+    
+    // 星型のエフェクトを描画
+    void drawStar(Offset center, double radius, double opacity) {
+      paint.color = color.withOpacity(opacity);
+      final path = Path();
+      final outerRadius = radius;
+      final innerRadius = radius * 0.4;
+      final startAngle = -math.pi / 2;
+      
+      for (int i = 0; i < 10; i++) {
+        final angle = startAngle + i * math.pi / 5;
+        final radiusToUse = i.isEven ? outerRadius : innerRadius;
+        final x = center.dx + radiusToUse * math.cos(angle);
+        final y = center.dy + radiusToUse * math.sin(angle);
+        
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+      
+      path.close();
+      canvas.drawPath(path, paint);
+    }
+    
+    // 複数の星を描画
+    drawStar(Offset(size.width * 0.7, size.height * 0.3), 6, 0.8);
+    drawStar(Offset(size.width * 0.8, size.height * 0.5), 8, 0.6);
+    drawStar(Offset(size.width * 0.5, size.height * 0.2), 5, 0.4);
+    drawStar(Offset(size.width * 0.9, size.height * 0.15), 4, 0.3);
+  }
+  
+  @override
+  bool shouldRepaint(covariant SparklesPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
+class _CompactFeature {
+  final IconData icon;
+  final String text;
+
+  _CompactFeature({required this.icon, required this.text});
+}
+
+// シンプルなローディングバー（インジケータ）
+class LoadingBar extends StatelessWidget {
+  final double width;
+  final double height;
+  final Color baseColor;
+  final Color highlightColor;
+  final BorderRadius? borderRadius;
+
+  const LoadingBar({
+    Key? key,
+    required this.width,
+    required this.height,
+    this.baseColor = const Color(0xFFE0E0E0),
+    this.highlightColor = const Color(0xFF9E9E9E),
+    this.borderRadius,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.circular(height / 2),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: LinearProgressIndicator(
+          backgroundColor: baseColor,
+          valueColor: AlwaysStoppedAnimation<Color>(highlightColor),
+          minHeight: height,
+        ),
+      ),
+    );
+  }
+}
+
+Future<bool> showPremiumBottomSheet(BuildContext context) async {
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => const PremiumBottomSheet(),
+  );
+  return result ?? false;
+}

@@ -1,0 +1,60 @@
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# --- Logs & temp ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.cache/
+tmp/
+temp/
+.tmp/
+
+# --- Environment files ---
+.env
+.env.*
+!.env.example
+
+# --- Node.js ---
+node_modules/
+.npm
+.eslintcache
+
+# --- Firebase ---
+.firebase/
+firebase-debug.log*
+firebase-debug.*.log*
+
+# Firebase Functions (TypeScript build output)
+firebase/functions/lib/
+
+# --- Flutter / Dart (top-level safety) ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.packages
+build/
+
+# --- iOS / Xcode (keep Podfile.lock tracked) ---
+**/Pods/
+**/.symlinks/
+**/Flutter/ephemeral/
+**/*.xcuserstate
+**/*xcuserdata/
+
+# --- Android ---
+**/.gradle/
+**/local.properties
+**/captures/
