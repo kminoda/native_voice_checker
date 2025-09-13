@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:native_voice_flutter/l10n/app_localizations.dart';
+import 'package:native_voice_flutter/services/premium_service.dart';
 
 Future<void> showPremiumBottomSheet(BuildContext context) async {
   await showModalBottomSheet<void>(
@@ -8,86 +10,178 @@ Future<void> showPremiumBottomSheet(BuildContext context) async {
       final surface = Theme.of(context).colorScheme.surface;
       final subtle = Colors.white60;
 
-      return SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header visual
-              const _HeaderArt(),
-              const SizedBox(height: 16),
+      return _PremiumSheet(surface: surface, subtle: subtle);
+    },
+  );
+}
 
-              // Title & subtitle
-              const Text(
-                'プレミアムプラン',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'ネイティブの練習に集中できる最適な環境を。広告なしで快適、音声生成は回数制限なく使い放題。',
-                style: TextStyle(color: subtle, height: 1.4),
-              ),
-              const SizedBox(height: 16),
+class _PremiumSheet extends StatefulWidget {
+  const _PremiumSheet({required this.surface, required this.subtle});
+  final Color surface;
+  final Color subtle;
 
-              // Features card
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white12),
+  @override
+  State<_PremiumSheet> createState() => _PremiumSheetState();
+}
+
+class _PremiumSheetState extends State<_PremiumSheet> {
+  final PremiumService _svc = PremiumService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _svc.addListener(_onUpdate);
+    // Best-effort configure/price
+    _svc.ensureConfigured();
+  }
+
+  @override
+  void dispose() {
+    _svc.removeListener(_onUpdate);
+    super.dispose();
+  }
+
+  void _onUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPremium = _svc.isPremium;
+    final isLoading = _svc.isLoading;
+    final price = _svc.price; // like "¥480"
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _HeaderArt(),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Text(
+                  AppLocalizations.of(context)!.premiumPlan,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Column(
-                  children: const [
-                    _FeatureRow(icon: Icons.block, label: '広告なし'),
-                    SizedBox(height: 12),
-                    _FeatureRow(icon: Icons.all_inclusive_rounded, label: '音声回数制限なし'),
-                  ],
-                ),
+                const SizedBox(width: 8),
+                if (isPremium)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.greenAccent.withOpacity(0.6)),
+                    ),
+                    child: Text(AppLocalizations.of(context)!.subscribed, style: const TextStyle(color: Colors.greenAccent)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              AppLocalizations.of(context)!.premiumDescription,
+              style: TextStyle(color: widget.subtle, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: widget.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white12),
               ),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                children: [
+                  _FeatureRow(icon: Icons.block, label: AppLocalizations.of(context)!.featureNoAds),
+                  const SizedBox(height: 12),
+                  _FeatureRow(icon: Icons.all_inclusive_rounded, label: AppLocalizations.of(context)!.featureUnlimited),
+                ],
+              ),
+            ),
 
-              const SizedBox(height: 18),
+            const SizedBox(height: 18),
 
-              // Monthly plan CTA (subscription only)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('サブスクの購入は後日対応予定です')),
-                    );
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    child: Text('月額プランに登録 (準備中)', style: TextStyle(fontSize: 16)),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isPremium || isLoading
+                    ? null
+                    : () async {
+                        final ok = await _svc.purchaseMonthly();
+                        if (ok) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(AppLocalizations.of(context)!.thanksPremium)),
+                          );
+                        } else {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(AppLocalizations.of(context)!.purchaseFailed)),
+                          );
+                        }
+                      },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    isPremium
+                        ? AppLocalizations.of(context)!.subscribed
+                        : (isLoading
+                            ? AppLocalizations.of(context)!.processing
+                            : (price != null
+                                ? AppLocalizations.of(context)!.subscribeMonthlyWithPrice(price)
+                                : AppLocalizations.of(context)!.subscribeMonthly)),
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+            ),
+            const SizedBox(height: 10),
 
-              // Secondary actions
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('閉じる'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            final ok = await _svc.restore();
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok
+                                    ? AppLocalizations.of(context)!.restoreSuccess
+                                    : AppLocalizations.of(context)!.restoreFailed),
+                              ),
+                            );
+                          },
+                    child: Text(AppLocalizations.of(context)!.restorePurchases),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(AppLocalizations.of(context)!.close),
+                  ),
+                ),
+              ],
+            ),
 
-              const SizedBox(height: 4),
-              Text(
-                'サブスクリプションのみ対応（単発購入は非対応）。価格と購入フローは後日公開予定です。',
-                style: TextStyle(color: subtle, fontSize: 12),
-              ),
-            ],
-          ),
+            const SizedBox(height: 6),
+            Text(
+              AppLocalizations.of(context)!.subscriptionNote,
+              style: TextStyle(color: widget.subtle, fontSize: 12),
+            ),
+          ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 class _HeaderArt extends StatelessWidget {
@@ -124,15 +218,17 @@ class _HeaderArt extends StatelessWidget {
               left: 12,
               right: 12,
               child: Row(
-                children: const [
-                  Icon(Icons.stars_rounded, color: Colors.white70, size: 18),
-                  SizedBox(width: 6),
+                children: [
+                  const Icon(Icons.stars_rounded, color: Colors.white70, size: 18),
+                  const SizedBox(width: 6),
                   Expanded(
-                    child: Text(
-                      '快適な学習体験をアップグレード',
-                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Builder(
+                      builder: (context) => Text(
+                        AppLocalizations.of(context)!.upgradeTagline,
+                        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],

@@ -41,4 +41,26 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
+
+  # Workaround for Swift ambiguity in RevenueCat's hybrid common sources
+  # Error: 'SubscriptionPeriod' is ambiguous for type lookup in this context
+  # This patches the generated pod source to fully qualify the type with the RevenueCat module
+  begin
+    pods_dir = File.join(__dir__, 'Pods')
+    file_path = File.join(pods_dir, 'PurchasesHybridCommon/ios/PurchasesHybridCommon/PurchasesHybridCommon/StoreProduct+HybridAdditions.swift')
+    if File.exist?(file_path)
+      content = File.read(file_path)
+      patched = content
+                  .gsub('static func rc_normalized(subscriptionPeriod: SubscriptionPeriod)',
+                        'static func rc_normalized(subscriptionPeriod: RevenueCat.SubscriptionPeriod)')
+                  .gsub('static func rc_normalized(subscriptionPeriodUnit: SubscriptionPeriod.Unit)',
+                        'static func rc_normalized(subscriptionPeriodUnit: RevenueCat.SubscriptionPeriod.Unit)')
+      if patched != content
+        File.write(file_path, patched)
+        puts "[Podfile] Patched RevenueCat SubscriptionPeriod ambiguity in #{file_path}"
+      end
+    end
+  rescue => e
+    puts "[Podfile] Patch step failed: #{e}"
+  end
 end

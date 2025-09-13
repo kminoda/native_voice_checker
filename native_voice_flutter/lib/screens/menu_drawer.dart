@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:native_voice_flutter/l10n/app_localizations.dart';
 import 'package:native_voice_flutter/services/session_store.dart';
 import 'package:native_voice_flutter/screens/premium_bottom_sheet.dart';
+import 'package:native_voice_flutter/services/premium_service.dart';
 import 'package:native_voice_flutter/screens/settings_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,6 +23,8 @@ class _MenuDrawerState extends State<MenuDrawer> {
   final SessionStore _store = SessionStore();
   String _query = '';
   final Uri _reviewUri = Uri.parse('https://example.com/app-review');
+  final Uri _ankiAppUri = Uri.parse('https://apps.apple.com/jp/app/id6740526880');
+  final PremiumService _premium = PremiumService.instance;
 
   Future<void> _createNewSession() async {
     final id = 'session_${DateTime.now().millisecondsSinceEpoch}';
@@ -33,7 +37,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
     final width = MediaQuery.of(context).size.width;
     const double topOverlayPadding = 12; // visual spacing in the top overlay
     const double topOverlayHeight = 72; // approx TextField height + paddings
-    const double bottomOverlayHeight = 180; // approx 3 ListTiles + paddings
+    const double bottomOverlayHeight = 240; // approx 4 ListTiles + paddings
 
     return Drawer(
       width: width * 0.85,
@@ -52,10 +56,10 @@ class _MenuDrawerState extends State<MenuDrawer> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (sessions.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text(
-                        'セッションがありません',
-                        style: TextStyle(color: Colors.white54),
+                        AppLocalizations.of(context)!.noSessions,
+                        style: const TextStyle(color: Colors.white54),
                       ),
                     );
                   }
@@ -68,7 +72,8 @@ class _MenuDrawerState extends State<MenuDrawer> {
                     separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
                     itemBuilder: (context, index) {
                       final s = sessions[index];
-                      final display = s.text.isEmpty ? '(無題)' : s.text;
+                      final l10n = AppLocalizations.of(context)!;
+                      final display = s.text.isEmpty ? l10n.untitled : s.text;
                       return ListTile(
                         title: Text(
                           display,
@@ -76,7 +81,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          '${s.language} / ${s.gender == 'male' ? '男性' : '女性'}',
+                          l10n.currentVoice(s.language, s.gender == 'male' ? l10n.male : l10n.female),
                           style: const TextStyle(color: Colors.white54),
                         ),
                         onTap: () {
@@ -108,16 +113,16 @@ class _MenuDrawerState extends State<MenuDrawer> {
                           child: TextField(
                             controller: _searchController,
                             onChanged: (v) => setState(() => _query = v),
-                            decoration: const InputDecoration(
-                              hintText: 'セッションを検索',
-                              prefixIcon: Icon(Icons.search),
+                            decoration: InputDecoration(
+                              hintText: AppLocalizations.of(context)!.searchSessionsHint,
+                              prefixIcon: const Icon(Icons.search),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.add_circle_outline),
-                          tooltip: '新規作成',
+                          tooltip: AppLocalizations.of(context)!.newSession,
                           onPressed: _createNewSession,
                         ),
                       ],
@@ -144,34 +149,68 @@ class _MenuDrawerState extends State<MenuDrawer> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ListTile(
-                            leading: const Icon(Icons.workspace_premium_outlined),
-                            title: const Text('プレミアムプラン'),
-                            onTap: () async {
-                              await showPremiumBottomSheet(context);
-                            },
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.rate_review_outlined),
-                            title: const Text('レビューを書く'),
+                            leading: const Icon(Icons.menu_book_outlined),
+                            title: Text(AppLocalizations.of(context)!.wordbookListen),
                             onTap: () async {
                               try {
-                                if (!await launchUrl(_reviewUri, mode: LaunchMode.externalApplication)) {
+                                if (!await launchUrl(_ankiAppUri, mode: LaunchMode.externalApplication)) {
                                   // ignore: use_build_context_synchronously
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('リンクを開けませんでした')),
+                                    SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
                                   );
                                 }
                               } catch (_) {
                                 // ignore: use_build_context_synchronously
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('リンクを開けませんでした')),
+                                  SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
+                                );
+                              }
+                            },
+                          ),
+                          AnimatedBuilder(
+                            animation: _premium,
+                            builder: (context, _) {
+                              final isPremium = _premium.isPremium;
+                              return ListTile(
+                                leading: const Icon(Icons.workspace_premium_outlined),
+                                title: Text(AppLocalizations.of(context)!.premiumPlan),
+                                subtitle: Text(
+                                  isPremium
+                                      ? AppLocalizations.of(context)!.premiumSubtitlePremium
+                                      : AppLocalizations.of(context)!.premiumSubtitleNot,
+                                  style: const TextStyle(color: Colors.white54),
+                                ),
+                                trailing: isPremium
+                                    ? const Icon(Icons.verified_rounded, color: Colors.greenAccent)
+                                    : null,
+                                onTap: () async {
+                                  await showPremiumBottomSheet(context);
+                                },
+                              );
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.rate_review_outlined),
+                            title: Text(AppLocalizations.of(context)!.review),
+                            onTap: () async {
+                              try {
+                                if (!await launchUrl(_reviewUri, mode: LaunchMode.externalApplication)) {
+                                  // ignore: use_build_context_synchronously
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
+                                  );
+                                }
+                              } catch (_) {
+                                // ignore: use_build_context_synchronously
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
                                 );
                               }
                             },
                           ),
                           ListTile(
                             leading: const Icon(Icons.settings_outlined),
-                            title: const Text('設定'),
+                            title: Text(AppLocalizations.of(context)!.settings),
                             onTap: () async {
                               Navigator.of(context).pop();
                               // open settings bottom sheet on the root scaffold
@@ -204,7 +243,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
           children: [
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('削除'),
+              title: Text(AppLocalizations.of(context)!.delete),
               onTap: () async {
                 Navigator.of(context).pop();
                 await _deleteSession(s);
@@ -222,16 +261,16 @@ class _MenuDrawerState extends State<MenuDrawer> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('削除しますか？'),
-        content: const Text('セッションのデータと音声ファイルを削除します。'),
+        title: Text(AppLocalizations.of(context)!.confirmDeleteAudioTitle),
+        content: Text(AppLocalizations.of(context)!.confirmDeleteAudioMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('キャンセル'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('削除'),
+            child: Text(AppLocalizations.of(context)!.delete),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:native_voice_flutter/l10n/app_localizations.dart';
 import 'package:native_voice_flutter/screens/language_bottom_sheet.dart';
 import 'package:native_voice_flutter/services/defaults_store.dart';
 
@@ -45,12 +46,12 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'アプリ設定',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    AppLocalizations.of(context)!.appSettings,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  Text('デフォルトの音声設定', style: TextStyle(color: Colors.grey.shade300)),
+                  Text(AppLocalizations.of(context)!.defaultVoiceSettings, style: TextStyle(color: Colors.grey.shade300)),
                   const SizedBox(height: 12),
                   _DefaultVoiceEditor(
                     language: defaults.language,
@@ -63,7 +64,7 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('キャンセル'),
+                          child: Text(AppLocalizations.of(context)!.cancel),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -75,7 +76,7 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
                             if (!mounted) return;
                             Navigator.of(context).pop(true);
                           },
-                          child: const Text('保存'),
+                          child: Text(AppLocalizations.of(context)!.save),
                         ),
                       ),
                     ],
@@ -111,37 +112,38 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('言語', style: TextStyle(color: Colors.grey.shade300)),
+        Text(AppLocalizations.of(context)!.labelLanguage, style: TextStyle(color: Colors.grey.shade300)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: _language,
-          items: const [
-            DropdownMenuItem(value: 'en-US', child: Text('英語 (米国)')),
-            DropdownMenuItem(value: 'en-GB', child: Text('英語 (英国)')),
-            DropdownMenuItem(value: 'ja-JP', child: Text('日本語')),
-            DropdownMenuItem(value: 'zh-CN', child: Text('中国語 (簡体字)')),
-            DropdownMenuItem(value: 'zh-TW', child: Text('中国語 (繁体字)')),
-            DropdownMenuItem(value: 'es-ES', child: Text('スペイン語')),
-            DropdownMenuItem(value: 'fr-FR', child: Text('フランス語')),
-            DropdownMenuItem(value: 'de-DE', child: Text('ドイツ語')),
-            DropdownMenuItem(value: 'ko-KR', child: Text('韓国語')),
-            DropdownMenuItem(value: 'it-IT', child: Text('イタリア語')),
-            DropdownMenuItem(value: 'pt-BR', child: Text('ポルトガル語 (ブラジル)')),
-            DropdownMenuItem(value: 'ru-RU', child: Text('ロシア語')),
-            DropdownMenuItem(value: 'ar-XA', child: Text('アラビア語')),
-            DropdownMenuItem(value: 'hi-IN', child: Text('ヒンディー語')),
-            DropdownMenuItem(value: 'tr-TR', child: Text('トルコ語')),
-            DropdownMenuItem(value: 'nl-NL', child: Text('オランダ語')),
-            DropdownMenuItem(value: 'pl-PL', child: Text('ポーランド語')),
-            DropdownMenuItem(value: 'sv-SE', child: Text('スウェーデン語')),
-            DropdownMenuItem(value: 'vi-VN', child: Text('ベトナム語')),
-            DropdownMenuItem(value: 'th-TH', child: Text('タイ語')),
-            DropdownMenuItem(value: 'id-ID', child: Text('インドネシア語')),
-            DropdownMenuItem(value: 'he-IL', child: Text('ヘブライ語')),
-            DropdownMenuItem(value: 'da-DK', child: Text('デンマーク語')),
-            DropdownMenuItem(value: 'el-GR', child: Text('ギリシャ語')),
-            DropdownMenuItem(value: 'fi-FI', child: Text('フィンランド語')),
-            DropdownMenuItem(value: 'nb-NO', child: Text('ノルウェー語')),
+          menuMaxHeight: MediaQuery.of(context).size.height * 0.6,
+          items: [
+            DropdownMenuItem(value: 'en-US', child: Text(AppLocalizations.of(context)!.lang_en_US)),
+            DropdownMenuItem(value: 'en-GB', child: Text(AppLocalizations.of(context)!.lang_en_GB)),
+            DropdownMenuItem(value: 'ja-JP', child: Text(AppLocalizations.of(context)!.lang_ja_JP)),
+            DropdownMenuItem(value: 'zh-CN', child: Text(AppLocalizations.of(context)!.lang_zh_CN)),
+            DropdownMenuItem(value: 'zh-TW', child: Text(AppLocalizations.of(context)!.lang_zh_TW)),
+            DropdownMenuItem(value: 'es-ES', child: Text(AppLocalizations.of(context)!.lang_es_ES)),
+            DropdownMenuItem(value: 'fr-FR', child: Text(AppLocalizations.of(context)!.lang_fr_FR)),
+            DropdownMenuItem(value: 'de-DE', child: Text(AppLocalizations.of(context)!.lang_de_DE)),
+            DropdownMenuItem(value: 'ko-KR', child: Text(AppLocalizations.of(context)!.lang_ko_KR)),
+            DropdownMenuItem(value: 'it-IT', child: Text(AppLocalizations.of(context)!.lang_it_IT)),
+            DropdownMenuItem(value: 'pt-BR', child: Text(AppLocalizations.of(context)!.lang_pt_BR)),
+            DropdownMenuItem(value: 'ru-RU', child: Text(AppLocalizations.of(context)!.lang_ru_RU)),
+            DropdownMenuItem(value: 'ar-XA', child: Text(AppLocalizations.of(context)!.lang_ar_XA)),
+            DropdownMenuItem(value: 'hi-IN', child: Text(AppLocalizations.of(context)!.lang_hi_IN)),
+            DropdownMenuItem(value: 'tr-TR', child: Text(AppLocalizations.of(context)!.lang_tr_TR)),
+            DropdownMenuItem(value: 'nl-NL', child: Text(AppLocalizations.of(context)!.lang_nl_NL)),
+            DropdownMenuItem(value: 'pl-PL', child: Text(AppLocalizations.of(context)!.lang_pl_PL)),
+            DropdownMenuItem(value: 'sv-SE', child: Text(AppLocalizations.of(context)!.lang_sv_SE)),
+            DropdownMenuItem(value: 'vi-VN', child: Text(AppLocalizations.of(context)!.lang_vi_VN)),
+            DropdownMenuItem(value: 'th-TH', child: Text(AppLocalizations.of(context)!.lang_th_TH)),
+            DropdownMenuItem(value: 'id-ID', child: Text(AppLocalizations.of(context)!.lang_id_ID)),
+            DropdownMenuItem(value: 'he-IL', child: Text(AppLocalizations.of(context)!.lang_he_IL)),
+            DropdownMenuItem(value: 'da-DK', child: Text(AppLocalizations.of(context)!.lang_da_DK)),
+            DropdownMenuItem(value: 'el-GR', child: Text(AppLocalizations.of(context)!.lang_el_GR)),
+            DropdownMenuItem(value: 'fi-FI', child: Text(AppLocalizations.of(context)!.lang_fi_FI)),
+            DropdownMenuItem(value: 'nb-NO', child: Text(AppLocalizations.of(context)!.lang_nb_NO)),
           ],
           onChanged: (v) {
             setState(() => _language = v ?? _language);
@@ -149,13 +151,13 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
           },
         ),
         const SizedBox(height: 16),
-        Text('ボイス', style: TextStyle(color: Colors.grey.shade300)),
+        Text(AppLocalizations.of(context)!.labelVoice, style: TextStyle(color: Colors.grey.shade300)),
         const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
               child: ChoiceChip(
-                label: const Text('男性'),
+                label: Text(AppLocalizations.of(context)!.male),
                 selected: _gender == 'male',
                 onSelected: (_) {
                   setState(() => _gender = 'male');
@@ -166,7 +168,7 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
             const SizedBox(width: 12),
             Expanded(
               child: ChoiceChip(
-                label: const Text('女性'),
+                label: Text(AppLocalizations.of(context)!.female),
                 selected: _gender == 'female',
                 onSelected: (_) {
                   setState(() => _gender = 'female');
@@ -180,4 +182,3 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
     );
   }
 }
-
