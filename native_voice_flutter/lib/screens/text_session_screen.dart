@@ -12,6 +12,7 @@ import 'package:native_voice_flutter/services/defaults_store.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
+import 'package:flutter/services.dart';
 
 class TextSessionScreen extends StatefulWidget {
   const TextSessionScreen({super.key});
@@ -308,6 +309,9 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
       _audioPath = null;
       _hasAudio = false;
     });
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (_) {}
   }
 
   Future<bool?> _confirm(
@@ -355,7 +359,10 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              Scaffold.of(context).openDrawer();
+            },
             tooltip: AppLocalizations.of(context)!.menu,
           ),
         ),
@@ -363,7 +370,15 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
         centerTitle: false,
       ),
       body: SafeArea(
-        child: Padding(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => FocusScope.of(context).unfocus(),
+          onVerticalDragUpdate: (details) {
+            if (details.primaryDelta != null && details.primaryDelta! > 6) {
+              FocusScope.of(context).unfocus();
+            }
+          },
+          child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -387,7 +402,10 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: _openSettings,
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      _openSettings();
+                    },
                     icon: const Icon(Icons.tune),
                     tooltip: AppLocalizations.of(context)!.languageSettings,
                   ),
@@ -395,8 +413,9 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
                   Builder(builder: (context) {
                     final l10n = AppLocalizations.of(context)!;
                     final genderLabel = _settings.gender == 'male' ? l10n.male : l10n.female;
+                    final langName = _langName(context, _settings.language);
                     return Text(
-                      l10n.currentVoice(_settings.language, genderLabel),
+                      l10n.currentVoice(langName, genderLabel),
                       style: const TextStyle(color: Colors.white70),
                     );
                   }),
@@ -404,7 +423,10 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
                   ElevatedButton.icon(
                     onPressed: _textController.text.trim().isEmpty || _isGenerating
                         ? null
-                        : _generateAudio,
+                        : () {
+                            HapticFeedback.mediumImpact();
+                            _generateAudio();
+                          },
                     icon: _isGenerating
                         ? const SizedBox(
                             width: 18,
@@ -427,6 +449,7 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
                   positionStream: _player.positionStream,
                   durationStream: _player.durationStream,
                   onPlayPause: () async {
+                    HapticFeedback.selectionClick();
                     final duration = _player.duration;
                     final position = _player.position;
                     final ps = await _player.playerStateStream.first;
@@ -464,8 +487,69 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
             ],
           ),
         ),
+        ),
       ),
     );
+  }
+}
+
+String _langName(BuildContext context, String code) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (code) {
+    case 'en-US':
+      return l10n.lang_en_US;
+    case 'en-GB':
+      return l10n.lang_en_GB;
+    case 'ja-JP':
+      return l10n.lang_ja_JP;
+    case 'zh-CN':
+      return l10n.lang_zh_CN;
+    case 'zh-TW':
+      return l10n.lang_zh_TW;
+    case 'es-ES':
+      return l10n.lang_es_ES;
+    case 'fr-FR':
+      return l10n.lang_fr_FR;
+    case 'de-DE':
+      return l10n.lang_de_DE;
+    case 'ko-KR':
+      return l10n.lang_ko_KR;
+    case 'it-IT':
+      return l10n.lang_it_IT;
+    case 'pt-BR':
+      return l10n.lang_pt_BR;
+    case 'ru-RU':
+      return l10n.lang_ru_RU;
+    case 'ar-XA':
+      return l10n.lang_ar_XA;
+    case 'hi-IN':
+      return l10n.lang_hi_IN;
+    case 'tr-TR':
+      return l10n.lang_tr_TR;
+    case 'nl-NL':
+      return l10n.lang_nl_NL;
+    case 'pl-PL':
+      return l10n.lang_pl_PL;
+    case 'sv-SE':
+      return l10n.lang_sv_SE;
+    case 'vi-VN':
+      return l10n.lang_vi_VN;
+    case 'th-TH':
+      return l10n.lang_th_TH;
+    case 'id-ID':
+      return l10n.lang_id_ID;
+    case 'he-IL':
+      return l10n.lang_he_IL;
+    case 'da-DK':
+      return l10n.lang_da_DK;
+    case 'el-GR':
+      return l10n.lang_el_GR;
+    case 'fi-FI':
+      return l10n.lang_fi_FI;
+    case 'nb-NO':
+      return l10n.lang_nb_NO;
+    default:
+      return code;
   }
 }
 
@@ -597,6 +681,9 @@ class _PositionBarState extends State<_PositionBar> {
                 onChangeStart: totalMs == 0
                     ? null
                     : (v) {
+                        try {
+                          HapticFeedback.selectionClick();
+                        } catch (_) {}
                         setState(() {
                           _dragging = true;
                           _dragValue = v;
@@ -612,6 +699,9 @@ class _PositionBarState extends State<_PositionBar> {
                     : (v) {
                         final targetMs = (v.clamp(0.0, 1.0) * totalMs).round();
                         widget.onSeek(Duration(milliseconds: targetMs));
+                        try {
+                          HapticFeedback.lightImpact();
+                        } catch (_) {}
                         setState(() {
                           _dragging = false;
                           _dragValue = null;

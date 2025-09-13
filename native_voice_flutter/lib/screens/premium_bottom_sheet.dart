@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:native_voice_flutter/l10n/app_localizations.dart';
 import 'package:native_voice_flutter/services/premium_service.dart';
+import 'package:flutter/services.dart';
 
 Future<void> showPremiumBottomSheet(BuildContext context) async {
   await showModalBottomSheet<void>(
     context: context,
-    isScrollControlled: false,
+    isScrollControlled: true,
     builder: (context) {
       final surface = Theme.of(context).colorScheme.surface;
       final subtle = Colors.white60;
 
-      return _PremiumSheet(surface: surface, subtle: subtle);
+      return FractionallySizedBox(
+        heightFactor: 0.75,
+        child: _PremiumSheet(surface: surface, subtle: subtle),
+      );
     },
   );
 }
@@ -112,6 +116,7 @@ class _PremiumSheetState extends State<_PremiumSheet> {
                 onPressed: isPremium || isLoading
                     ? null
                     : () async {
+                        HapticFeedback.mediumImpact();
                         final ok = await _svc.purchaseMonthly();
                         if (ok) {
                           if (!mounted) return;
@@ -142,34 +147,25 @@ class _PremiumSheetState extends State<_PremiumSheet> {
             ),
             const SizedBox(height: 10),
 
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () async {
-                            final ok = await _svc.restore();
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(ok
-                                    ? AppLocalizations.of(context)!.restoreSuccess
-                                    : AppLocalizations.of(context)!.restoreFailed),
-                              ),
-                            );
-                          },
-                    child: Text(AppLocalizations.of(context)!.restorePurchases),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(AppLocalizations.of(context)!.close),
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        HapticFeedback.selectionClick();
+                        final ok = await _svc.restore();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ok
+                                ? AppLocalizations.of(context)!.restoreSuccess
+                                : AppLocalizations.of(context)!.restoreFailed),
+                          ),
+                        );
+                      },
+                child: Text(AppLocalizations.of(context)!.restorePurchases),
+              ),
             ),
 
             const SizedBox(height: 6),

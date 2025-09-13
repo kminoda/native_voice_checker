@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:native_voice_flutter/l10n/app_localizations.dart';
 
 class LanguageSettings {
@@ -83,7 +84,10 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
                 DropdownMenuItem(value: 'fi-FI', child: Text(AppLocalizations.of(context)!.lang_fi_FI)),
                 DropdownMenuItem(value: 'nb-NO', child: Text(AppLocalizations.of(context)!.lang_nb_NO)),
               ],
-              onChanged: (v) => setState(() => _language = v ?? _language),
+              onChanged: (v) {
+                HapticFeedback.selectionClick();
+                setState(() => _language = v ?? _language);
+              },
             ),
             const SizedBox(height: 16),
             Text(AppLocalizations.of(context)!.labelVoice, style: TextStyle(color: Colors.grey.shade300)),
@@ -94,7 +98,10 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
                   child: ChoiceChip(
                     label: Text(AppLocalizations.of(context)!.male),
                     selected: _gender == 'male',
-                    onSelected: (_) => setState(() => _gender = 'male'),
+                    onSelected: (_) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _gender = 'male');
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -102,7 +109,10 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
                   child: ChoiceChip(
                     label: Text(AppLocalizations.of(context)!.female),
                     selected: _gender == 'female',
-                    onSelected: (_) => setState(() => _gender = 'female'),
+                    onSelected: (_) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _gender = 'female');
+                    },
                   ),
                 ),
               ],
@@ -112,16 +122,22 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).pop();
+                    },
                     child: Text(AppLocalizations.of(context)!.cancel),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(
-                      LanguageSettings(language: _language, gender: _gender),
-                    ),
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      Navigator.of(context).pop(
+                        LanguageSettings(language: _language, gender: _gender),
+                      );
+                    },
                     child: Text(AppLocalizations.of(context)!.save),
                   ),
                 ),

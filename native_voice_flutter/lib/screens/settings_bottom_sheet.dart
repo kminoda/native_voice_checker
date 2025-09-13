@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:native_voice_flutter/l10n/app_localizations.dart';
 import 'package:native_voice_flutter/screens/language_bottom_sheet.dart';
 import 'package:native_voice_flutter/services/defaults_store.dart';
@@ -63,7 +64,10 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(false),
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.of(context).pop(false);
+                          },
                           child: Text(AppLocalizations.of(context)!.cancel),
                         ),
                       ),
@@ -71,6 +75,7 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () async {
+                            HapticFeedback.mediumImpact();
                             final d = _defaults!;
                             await _store.save(d);
                             if (!mounted) return;
@@ -146,6 +151,7 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
             DropdownMenuItem(value: 'nb-NO', child: Text(AppLocalizations.of(context)!.lang_nb_NO)),
           ],
           onChanged: (v) {
+            HapticFeedback.selectionClick();
             setState(() => _language = v ?? _language);
             widget.onChanged(_language, _gender);
           },
@@ -160,6 +166,7 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
                 label: Text(AppLocalizations.of(context)!.male),
                 selected: _gender == 'male',
                 onSelected: (_) {
+                  HapticFeedback.selectionClick();
                   setState(() => _gender = 'male');
                   widget.onChanged(_language, _gender);
                 },
@@ -171,6 +178,7 @@ class _DefaultVoiceEditorState extends State<_DefaultVoiceEditor> {
                 label: Text(AppLocalizations.of(context)!.female),
                 selected: _gender == 'female',
                 onSelected: (_) {
+                  HapticFeedback.selectionClick();
                   setState(() => _gender = 'female');
                   widget.onChanged(_language, _gender);
                 },

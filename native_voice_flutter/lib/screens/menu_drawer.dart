@@ -8,6 +8,7 @@ import 'package:native_voice_flutter/services/premium_service.dart';
 import 'package:native_voice_flutter/screens/settings_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 
 class MenuDrawer extends StatefulWidget {
   const MenuDrawer({super.key, required this.onSelectSession});
@@ -81,15 +82,19 @@ class _MenuDrawerState extends State<MenuDrawer> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          l10n.currentVoice(s.language, s.gender == 'male' ? l10n.male : l10n.female),
+                          l10n.currentVoice(_langName(context, s.language), s.gender == 'male' ? l10n.male : l10n.female),
                           style: const TextStyle(color: Colors.white54),
                         ),
                         onTap: () {
+                          HapticFeedback.selectionClick();
                           Navigator.of(context).pop();
-                          widget.onSelectSession(s.id, s.text);
-                        },
-                        onLongPress: () => _showActions(s),
-                      );
+                              widget.onSelectSession(s.id, s.text);
+                            },
+                            onLongPress: () {
+                              HapticFeedback.selectionClick();
+                              _showActions(s);
+                            },
+                          );
                     },
                   );
                 },
@@ -123,7 +128,10 @@ class _MenuDrawerState extends State<MenuDrawer> {
                         IconButton(
                           icon: const Icon(Icons.add_circle_outline),
                           tooltip: AppLocalizations.of(context)!.newSession,
-                          onPressed: _createNewSession,
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            _createNewSession();
+                          },
                         ),
                       ],
                     ),
@@ -152,6 +160,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             leading: const Icon(Icons.menu_book_outlined),
                             title: Text(AppLocalizations.of(context)!.wordbookListen),
                             onTap: () async {
+                              HapticFeedback.selectionClick();
                               try {
                                 if (!await launchUrl(_ankiAppUri, mode: LaunchMode.externalApplication)) {
                                   // ignore: use_build_context_synchronously
@@ -184,6 +193,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                                     ? const Icon(Icons.verified_rounded, color: Colors.greenAccent)
                                     : null,
                                 onTap: () async {
+                                  HapticFeedback.selectionClick();
                                   await showPremiumBottomSheet(context);
                                 },
                               );
@@ -193,6 +203,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             leading: const Icon(Icons.rate_review_outlined),
                             title: Text(AppLocalizations.of(context)!.review),
                             onTap: () async {
+                              HapticFeedback.selectionClick();
                               try {
                                 if (!await launchUrl(_reviewUri, mode: LaunchMode.externalApplication)) {
                                   // ignore: use_build_context_synchronously
@@ -212,6 +223,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             leading: const Icon(Icons.settings_outlined),
                             title: Text(AppLocalizations.of(context)!.settings),
                             onTap: () async {
+                              HapticFeedback.selectionClick();
                               Navigator.of(context).pop();
                               // open settings bottom sheet on the root scaffold
                               await Future.delayed(const Duration(milliseconds: 100));
@@ -287,5 +299,65 @@ class _MenuDrawerState extends State<MenuDrawer> {
         }
       } catch (_) {}
     }
+  }
+}
+
+String _langName(BuildContext context, String code) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (code) {
+    case 'en-US':
+      return l10n.lang_en_US;
+    case 'en-GB':
+      return l10n.lang_en_GB;
+    case 'ja-JP':
+      return l10n.lang_ja_JP;
+    case 'zh-CN':
+      return l10n.lang_zh_CN;
+    case 'zh-TW':
+      return l10n.lang_zh_TW;
+    case 'es-ES':
+      return l10n.lang_es_ES;
+    case 'fr-FR':
+      return l10n.lang_fr_FR;
+    case 'de-DE':
+      return l10n.lang_de_DE;
+    case 'ko-KR':
+      return l10n.lang_ko_KR;
+    case 'it-IT':
+      return l10n.lang_it_IT;
+    case 'pt-BR':
+      return l10n.lang_pt_BR;
+    case 'ru-RU':
+      return l10n.lang_ru_RU;
+    case 'ar-XA':
+      return l10n.lang_ar_XA;
+    case 'hi-IN':
+      return l10n.lang_hi_IN;
+    case 'tr-TR':
+      return l10n.lang_tr_TR;
+    case 'nl-NL':
+      return l10n.lang_nl_NL;
+    case 'pl-PL':
+      return l10n.lang_pl_PL;
+    case 'sv-SE':
+      return l10n.lang_sv_SE;
+    case 'vi-VN':
+      return l10n.lang_vi_VN;
+    case 'th-TH':
+      return l10n.lang_th_TH;
+    case 'id-ID':
+      return l10n.lang_id_ID;
+    case 'he-IL':
+      return l10n.lang_he_IL;
+    case 'da-DK':
+      return l10n.lang_da_DK;
+    case 'el-GR':
+      return l10n.lang_el_GR;
+    case 'fi-FI':
+      return l10n.lang_fi_FI;
+    case 'nb-NO':
+      return l10n.lang_nb_NO;
+    default:
+      return code;
   }
 }
