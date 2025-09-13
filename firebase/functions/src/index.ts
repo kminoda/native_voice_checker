@@ -53,11 +53,12 @@ export const ttsGenerate = onCall({}, async (request) => {
   const usersRef = db.collection(USERS_COLLECTION).doc(uid);
   const inc = estimateTokens(text);
 
-  // Reserve tokens in a transaction; reject if exceeding free cap
+  // Reserve tokens in a transaction; reject if exceeding free cap.
+  // For premium users, do NOT decrement tokens at all.
   let isPremium = false;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(usersRef);
-    const data = snap.exists ? snap.data() || {} : {};
+    const data = snap.exists ? (snap.data() || {}) : {};
     const plan = (data.plan as string) || "free";
     const used = (data.totalTokensUsed as number) || 0;
     isPremium = plan === "premium";
@@ -69,18 +70,20 @@ export const ttsGenerate = onCall({}, async (request) => {
       );
     }
 
-    tx.set(
-      usersRef,
-      {
-        plan,
-        totalTokensUsed: admin.firestore.FieldValue.increment(inc),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: snap.exists
-          ? data.createdAt || admin.firestore.FieldValue.serverTimestamp()
-          : admin.firestore.FieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
+    const baseFields: Record<string, unknown> = {
+      plan,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: snap.exists
+        ? (data.createdAt || admin.firestore.FieldValue.serverTimestamp())
+        : admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // Only increment tokens for non-premium users
+    if (!isPremium) {
+      baseFields.totalTokensUsed = admin.firestore.FieldValue.increment(inc);
+    }
+
+    tx.set(usersRef, baseFields, {merge: true});
   });
 
   try {
