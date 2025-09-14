@@ -422,6 +422,18 @@ abstract class AppLocalizations {
   /// **'Rate the App'**
   String get review;
 
+  /// No description provided for @termsOfUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Use'**
+  String get termsOfUse;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get privacyPolicy;
+
   /// No description provided for @lang_en_US.
   ///
   /// In en, this message translates to:

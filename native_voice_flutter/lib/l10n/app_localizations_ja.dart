@@ -177,6 +177,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get review => 'アプリを評価する';
 
   @override
+  String get termsOfUse => '利用規約';
+
+  @override
+  String get privacyPolicy => 'プライバシーポリシー';
+
+  @override
   String get lang_en_US => '英語 (米国)';
 
   @override

@@ -40,8 +40,8 @@ class _MenuDrawerState extends State<MenuDrawer> {
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     const double topOverlayPadding = 12; // visual spacing in the top overlay
-    const double topOverlayHeight = 72; // approx TextField height + paddings
-    const double bottomOverlayHeight = 240; // approx 4 ListTiles + paddings
+    const double topOverlayHeight = 64; // slightly tighter search bar height
+    const double bottomOverlayHeight = 200; // tighter: dense tiles + smaller paddings
 
     return Drawer(
       width: width * 0.85,
@@ -160,6 +160,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ListTile(
+                            minVerticalPadding: 6,
                             leading: const Icon(Icons.menu_book_outlined),
                             title: Text(AppLocalizations.of(context)!.wordbookListen),
                             onTap: () async {
@@ -184,6 +185,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             builder: (context, _) {
                               final isPremium = _premium.isPremium;
                               return ListTile(
+                                minVerticalPadding: 6,
                                 leading: const Icon(Icons.workspace_premium_outlined),
                                 title: Text(AppLocalizations.of(context)!.premiumPlan),
                                 subtitle: Text(
@@ -203,6 +205,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             },
                           ),
                           ListTile(
+                            minVerticalPadding: 6,
                             leading: const Icon(Icons.star_border_rounded),
                             title: Text(AppLocalizations.of(context)!.review),
                             subtitle: Text(
@@ -233,6 +236,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             },
                           ),
                           ListTile(
+                            minVerticalPadding: 6,
                             leading: const Icon(Icons.settings_outlined),
                             title: Text(AppLocalizations.of(context)!.settings),
                             onTap: () async {

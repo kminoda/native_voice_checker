@@ -180,6 +180,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get review => 'Rate the App';
 
   @override
+  String get termsOfUse => 'Terms of Use';
+
+  @override
+  String get privacyPolicy => 'Privacy Policy';
+
+  @override
   String get lang_en_US => 'English (US)';
 
   @override

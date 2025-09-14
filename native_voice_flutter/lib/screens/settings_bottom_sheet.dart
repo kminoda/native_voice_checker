@@ -3,12 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:native_voice_flutter/l10n/app_localizations.dart';
 import 'package:native_voice_flutter/screens/language_bottom_sheet.dart';
 import 'package:native_voice_flutter/services/defaults_store.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 Future<bool?> showSettingsBottomSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
-    isScrollControlled: false,
-    builder: (context) => const _SettingsBottomSheet(),
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (context) => SizedBox(
+      height: MediaQuery.of(context).size.height * 0.5,
+      child: const _SettingsBottomSheet(),
+    ),
   );
 }
 
@@ -22,6 +27,8 @@ class _SettingsBottomSheet extends StatefulWidget {
 class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
   final DefaultsStore _store = DefaultsStore();
   DefaultSettings? _defaults;
+  final Uri _termsUri = Uri.parse('https://www.notion.so/Native-Voice-Check-Terms-of-Use-26d2e1f4abd28093973ff15f985b71cc?source=copy_link');
+  final Uri _privacyUri = Uri.parse('https://www.notion.so/Native-Voice-Check-Privacy-Policy-26d2e1f4abd2809b8758eb3b42a5aa97?source=copy_link');
 
   @override
   void initState() {
@@ -43,9 +50,8 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: defaults == null
             ? const Center(child: CircularProgressIndicator())
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+            : ListView(
+                shrinkWrap: true,
                 children: [
                   Text(
                     AppLocalizations.of(context)!.appSettings,
@@ -57,34 +63,42 @@ class _SettingsBottomSheetState extends State<_SettingsBottomSheet> {
                   _DefaultVoiceEditor(
                     language: defaults.language,
                     gender: defaults.gender,
-                    onChanged: (lang, gen) => _defaults = DefaultSettings(language: lang, gender: gen),
+                    onChanged: (lang, gen) {
+                      final nd = DefaultSettings(language: lang, gender: gen);
+                      _defaults = nd;
+                      _store.save(nd);
+                    },
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            HapticFeedback.selectionClick();
-                            Navigator.of(context).pop(false);
-                          },
-                          child: Text(AppLocalizations.of(context)!.cancel),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            HapticFeedback.mediumImpact();
-                            final d = _defaults!;
-                            await _store.save(d);
-                            if (!mounted) return;
-                            Navigator.of(context).pop(true);
-                          },
-                          child: Text(AppLocalizations.of(context)!.save),
-                        ),
-                      ),
-                    ],
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(AppLocalizations.of(context)!.termsOfUse),
+                    trailing: const Icon(Icons.open_in_new, size: 18),
+                    onTap: () async {
+                      HapticFeedback.selectionClick();
+                      final ok = await launchUrl(_termsUri, mode: LaunchMode.externalApplication);
+                      if (!ok && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
+                        );
+                      }
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(AppLocalizations.of(context)!.privacyPolicy),
+                    trailing: const Icon(Icons.open_in_new, size: 18),
+                    onTap: () async {
+                      HapticFeedback.selectionClick();
+                      final ok = await launchUrl(_privacyUri, mode: LaunchMode.externalApplication);
+                      if (!ok && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
+                        );
+                      }
+                    },
                   ),
                   const SizedBox(height: 8),
                 ],

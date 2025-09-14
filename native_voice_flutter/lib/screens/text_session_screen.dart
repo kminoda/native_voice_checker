@@ -117,14 +117,14 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
   }
 
   void _openSettings() async {
-    final result = await showLanguageBottomSheet(
+    await showLanguageBottomSheet(
       context,
       initial: _settings,
+      onChanged: (val) {
+        setState(() => _settings = val);
+        _scheduleSaveSession();
+      },
     );
-    if (result != null) {
-      setState(() => _settings = result);
-      _scheduleSaveSession();
-    }
   }
 
   void _generateAudio() async {

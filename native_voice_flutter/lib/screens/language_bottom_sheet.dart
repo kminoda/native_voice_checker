@@ -12,20 +12,22 @@ class LanguageSettings {
   String gender; // male | female
 }
 
-Future<LanguageSettings?> showLanguageBottomSheet(
+Future<void> showLanguageBottomSheet(
   BuildContext context, {
   required LanguageSettings initial,
+  required void Function(LanguageSettings value) onChanged,
 }) {
-  return showModalBottomSheet<LanguageSettings>(
+  return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: false,
-    builder: (context) => _LanguageBottomSheet(initial: initial),
+    builder: (context) => _LanguageBottomSheet(initial: initial, onChanged: onChanged),
   );
 }
 
 class _LanguageBottomSheet extends StatefulWidget {
-  const _LanguageBottomSheet({required this.initial});
+  const _LanguageBottomSheet({required this.initial, required this.onChanged});
   final LanguageSettings initial;
+  final void Function(LanguageSettings value) onChanged;
 
   @override
   State<_LanguageBottomSheet> createState() => _LanguageBottomSheetState();
@@ -87,6 +89,7 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
               onChanged: (v) {
                 HapticFeedback.selectionClick();
                 setState(() => _language = v ?? _language);
+                widget.onChanged(LanguageSettings(language: _language, gender: _gender));
               },
             ),
             const SizedBox(height: 16),
@@ -101,6 +104,7 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
                     onSelected: (_) {
                       HapticFeedback.selectionClick();
                       setState(() => _gender = 'male');
+                      widget.onChanged(LanguageSettings(language: _language, gender: _gender));
                     },
                   ),
                 ),
@@ -112,33 +116,8 @@ class _LanguageBottomSheetState extends State<_LanguageBottomSheet> {
                     onSelected: (_) {
                       HapticFeedback.selectionClick();
                       setState(() => _gender = 'female');
+                      widget.onChanged(LanguageSettings(language: _language, gender: _gender));
                     },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context).pop();
-                    },
-                    child: Text(AppLocalizations.of(context)!.cancel),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      HapticFeedback.mediumImpact();
-                      Navigator.of(context).pop(
-                        LanguageSettings(language: _language, gender: _gender),
-                      );
-                    },
-                    child: Text(AppLocalizations.of(context)!.save),
                   ),
                 ),
               ],
