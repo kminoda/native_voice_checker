@@ -88,7 +88,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newSession => 'New';
 
   @override
-  String get wordbookListen => 'Learn with wordbook';
+  String get wordbookListen => 'Learn with Flashcard';
 
   @override
   String get openLinkFailed => 'Could not open link';
@@ -145,8 +145,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get restoreFailed => 'Could not restore';
 
   @override
-  String get subscriptionNote =>
-      'Subscription only (no one-time purchase). Cancel anytime.';
+  String get subscriptionNote => 'Cancel anytime.';
 
   @override
   String get upgradeTagline => 'Upgrade your learning experience comfortably';

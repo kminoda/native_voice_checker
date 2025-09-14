@@ -143,7 +143,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get restoreFailed => '復元できませんでした';
 
   @override
-  String get subscriptionNote => 'サブスクリプションのみ対応（単発購入は非対応）。いつでもキャンセル可能。';
+  String get subscriptionNote => 'いつでもキャンセル可能。';
 
   @override
   String get upgradeTagline => '快適な学習体験をアップグレード';

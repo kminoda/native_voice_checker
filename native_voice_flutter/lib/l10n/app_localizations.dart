@@ -251,7 +251,7 @@ abstract class AppLocalizations {
   /// No description provided for @wordbookListen.
   ///
   /// In en, this message translates to:
-  /// **'Learn with wordbook'**
+  /// **'Learn with Flashcard'**
   String get wordbookListen;
 
   /// No description provided for @openLinkFailed.
@@ -359,7 +359,7 @@ abstract class AppLocalizations {
   /// No description provided for @subscriptionNote.
   ///
   /// In en, this message translates to:
-  /// **'Subscription only (no one-time purchase). Cancel anytime.'**
+  /// **'Cancel anytime.'**
   String get subscriptionNote;
 
   /// No description provided for @upgradeTagline.

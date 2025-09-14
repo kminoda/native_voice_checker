@@ -513,7 +513,10 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
     return Scaffold(
       // Dim the chat area slightly when the drawer (menu bar) is open
       drawerScrimColor: Colors.black26,
-      drawer: MenuDrawer(onSelectSession: _onSelectSession),
+      drawer: MenuDrawer(
+        onSelectSession: _onSelectSession,
+        currentSessionId: _currentSessionId,
+      ),
       onDrawerChanged: (isOpened) {
         if (!isOpened) {
           FocusScope.of(context).unfocus();
@@ -548,6 +551,34 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Voice summary (language / gender) and settings button above editor
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      _openSettings();
+                    },
+                    icon: const Icon(Icons.tune),
+                    tooltip: AppLocalizations.of(context)!.languageSettings,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Builder(builder: (context) {
+                      final l10n = AppLocalizations.of(context)!;
+                      final genderLabel = _settings.gender == 'male' ? l10n.male : l10n.female;
+                      final langName = _langName(context, _settings.language);
+                      return Text(
+                        l10n.currentVoice(langName, genderLabel),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Expanded(
                 child: TextField(
                   controller: _textController,
@@ -569,48 +600,29 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
               // Preset samples (only when editor is empty)
               _buildSamplePresets(context),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      _openSettings();
-                    },
-                    icon: const Icon(Icons.tune),
-                    tooltip: AppLocalizations.of(context)!.languageSettings,
+              // Generate button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _textController.text.trim().isEmpty || _isGenerating
+                      ? null
+                      : () {
+                          HapticFeedback.mediumImpact();
+                          _generateAudio();
+                        },
+                  icon: _isGenerating
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_awesome),
+                  label: Text(
+                    _isGenerating
+                        ? AppLocalizations.of(context)!.generating
+                        : AppLocalizations.of(context)!.generate,
                   ),
-                  const SizedBox(width: 8),
-                  Builder(builder: (context) {
-                    final l10n = AppLocalizations.of(context)!;
-                    final genderLabel = _settings.gender == 'male' ? l10n.male : l10n.female;
-                    final langName = _langName(context, _settings.language);
-                    return Text(
-                      l10n.currentVoice(langName, genderLabel),
-                      style: const TextStyle(color: Colors.white70),
-                    );
-                  }),
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: _textController.text.trim().isEmpty || _isGenerating
-                        ? null
-                        : () {
-                            HapticFeedback.mediumImpact();
-                            _generateAudio();
-                          },
-                    icon: _isGenerating
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.auto_awesome),
-                    label: Text(
-                      _isGenerating
-                          ? AppLocalizations.of(context)!.generating
-                          : AppLocalizations.of(context)!.generate,
-                    ),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 12),
               if (_hasAudio)
@@ -1040,3 +1052,6 @@ class _PositionBarState extends State<_PositionBar> {
     );
   }
 }
+
+/// Horizontally auto-scrolls long single-line text with pauses at ends.
+// (removed) Auto-scroll text widget was deemed unnecessary for UX.

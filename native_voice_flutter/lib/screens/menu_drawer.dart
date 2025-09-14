@@ -11,9 +11,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 
 class MenuDrawer extends StatefulWidget {
-  const MenuDrawer({super.key, required this.onSelectSession});
+  const MenuDrawer({
+    super.key,
+    required this.onSelectSession,
+    this.currentSessionId,
+  });
 
   final Future<void> Function(String id, String text) onSelectSession;
+  final String? currentSessionId;
 
   @override
   State<MenuDrawer> createState() => _MenuDrawerState();
@@ -366,6 +371,11 @@ class _MenuDrawerState extends State<MenuDrawer> {
           await audio.delete();
         }
       } catch (_) {}
+
+      // If the deleted session is the one currently open, auto-create a new one
+      if (widget.currentSessionId != null && widget.currentSessionId == s.id) {
+        await _createNewSession();
+      }
     }
   }
 }

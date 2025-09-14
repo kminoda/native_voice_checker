@@ -1,0 +1,209 @@
+// src/utils/constants.ts
+import {defineString} from "firebase-functions/params";
+
+// API キーのパラメータ定義
+export const openAiKeyParam = defineString("OPENAI_API_KEY");
+export const googleTtsApiKeyParam = defineString("GOOGLE_TTS_API_KEY");
+
+// 各操作のコスト定義
+export const COST = {
+  // TRANSLATION: 0,
+  TEXT_TO_SPEECH: 1,
+  IMAGE_CARD: 1,
+  // SUGGESTION: 0,
+};
+
+export const TASK_TYPES = {
+  IMAGE_CARD: "imageScan",
+  TEXT_TO_SPEECH: "textToSpeech",
+  // 将来的に追加するタスクをここに記述
+};
+
+// 言語マッピング
+export const LANGUAGE_PROMPT_MAP: {[key: string]: string} = {
+  "en": "English",
+  "ja": "Japanese",
+  "es": "Spanish",
+  "fr": "French",
+  "de": "German",
+  "zh": "Chinese (Simplified)",
+  "zh-TW": "Chinese (Traditional)",
+  "ko": "Korean",
+  // Add new languages here
+  "it": "Italian",
+  "pt": "Portuguese",
+  "ru": "Russian",
+  "ar": "Arabic",
+  "hi": "Hindi",
+  "tr": "Turkish",
+  "nl": "Dutch",
+  "pl": "Polish",
+  "sv": "Swedish",
+  "vi": "Vietnamese",
+  "th": "Thai",
+  "id": "Indonesian",
+  "he": "Hebrew",
+  "da": "Danish",
+  "el": "Greek",
+  "fi": "Finnish",
+  "no": "Norwegian",
+};
+
+export interface VoiceConfig {
+  code: string; // Google TTS用の言語コード
+  maleVoice: string; // 男性音声名（例: ja-JP-Standard-C）
+  femaleVoice: string; // 女性音声名（例: ja-JP-Standard-A）
+}
+
+// 言語コードから音声設定へのマッピング
+export const GOOGLE_LANGUAGE_MAP: {[key: string]: VoiceConfig} = {
+  "en": {
+    code: "en-US",
+    maleVoice: "en-US-Standard-D",
+    femaleVoice: "en-US-Standard-C",
+  },
+  "ja": {
+    code: "ja-JP",
+    maleVoice: "ja-JP-Standard-C",
+    femaleVoice: "ja-JP-Standard-B",
+  },
+  "es": {
+    code: "es-ES",
+    maleVoice: "es-ES-Standard-B",
+    femaleVoice: "es-ES-Standard-C",
+  },
+  "fr": {
+    code: "fr-FR",
+    maleVoice: "fr-FR-Standard-B",
+    femaleVoice: "fr-FR-Standard-C",
+  },
+  "de": {
+    code: "de-DE",
+    maleVoice: "de-DE-Standard-B",
+    femaleVoice: "de-DE-Standard-C",
+  },
+  "zh": {
+    code: "cmn-CN",
+    maleVoice: "cmn-CN-Standard-B",
+    femaleVoice: "cmn-CN-Standard-A",
+  },
+  "zh-TW": {
+    code: "cmn-TW",
+    maleVoice: "cmn-TW-Standard-B",
+    femaleVoice: "cmn-TW-Standard-A",
+  },
+  "ko": {
+    code: "ko-KR",
+    maleVoice: "ko-KR-Standard-C",
+    femaleVoice: "ko-KR-Standard-B",
+  },
+  "it": {
+    code: "it-IT",
+    maleVoice: "it-IT-Standard-C",
+    femaleVoice: "it-IT-Standard-B",
+  },
+  "pt": {
+    code: "pt-BR",
+    maleVoice: "pt-BR-Standard-B",
+    femaleVoice: "pt-BR-Standard-A",
+  },
+  "ru": {
+    code: "ru-RU",
+    maleVoice: "ru-RU-Standard-B",
+    femaleVoice: "ru-RU-Standard-A",
+  },
+  "ar": {
+    code: "ar-XA",
+    maleVoice: "ar-XA-Standard-B",
+    femaleVoice: "ar-XA-Standard-A",
+  },
+  "hi": {
+    code: "hi-IN",
+    maleVoice: "hi-IN-Standard-B",
+    femaleVoice: "hi-IN-Standard-A",
+  },
+  "tr": {
+    code: "tr-TR",
+    maleVoice: "tr-TR-Standard-B",
+    femaleVoice: "tr-TR-Standard-A",
+  },
+  "nl": {
+    code: "nl-NL",
+    maleVoice: "nl-NL-Standard-B",
+    femaleVoice: "nl-NL-Standard-A",
+  },
+  "pl": {
+    code: "pl-PL",
+    maleVoice: "pl-PL-Standard-B",
+    femaleVoice: "pl-PL-Standard-A",
+  },
+  "sv": {
+    code: "sv-SE",
+    maleVoice: "sv-SE-Standard-A",
+    femaleVoice: "sv-SE-Standard-A",
+  },
+  "vi": {
+    code: "vi-VN",
+    maleVoice: "vi-VN-Standard-B",
+    femaleVoice: "vi-VN-Standard-A",
+  },
+  "th": {
+    code: "th-TH",
+    maleVoice: "th-TH-Standard-A",
+    femaleVoice: "th-TH-Standard-A",
+  },
+  "id": {
+    code: "id-ID",
+    maleVoice: "id-ID-Standard-B",
+    femaleVoice: "id-ID-Standard-A",
+  },
+  "he": {
+    code: "he-IL",
+    maleVoice: "he-IL-Standard-B",
+    femaleVoice: "he-IL-Standard-A",
+  },
+  "da": {
+    code: "da-DK",
+    maleVoice: "da-DK-Standard-C",
+    femaleVoice: "da-DK-Standard-A",
+  },
+  "el": {
+    code: "el-GR",
+    maleVoice: "el-GR-Standard-A",
+    femaleVoice: "el-GR-Standard-A",
+  },
+  "fi": {
+    code: "fi-FI",
+    maleVoice: "fi-FI-Standard-A",
+    femaleVoice: "fi-FI-Standard-A",
+  },
+  "no": {
+    code: "nb-NO",
+    maleVoice: "nb-NO-Standard-B",
+    femaleVoice: "nb-NO-Standard-A",
+  },
+};
+
+// プロンプトテンプレート
+export const imagePromptTemplate = (
+  learningLanguage: string
+) => `
+You will provide a flashcard for a language learner.
+Strictly follow these rules:
+
+[Task]
+Analyze the provided image.
+Extract complete ${learningLanguage} sentence or standalone word/phrase.
+Follow exactly the output format rules.
+
+[Output Rules]
+One line per word/phrase or single sentence, without any disclaimers
+Do not break up each sentence,
+even if they contain commas or span multiple lines.
+Only ${learningLanguage} text is allowed.
+Max 10 items.
+
+[Example Output]
+This pen is made in China.
+It is important to be able to speak English.
+`;
