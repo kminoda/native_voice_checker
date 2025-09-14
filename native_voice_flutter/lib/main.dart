@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:native_voice_flutter/ui/theme.dart';
 import 'package:native_voice_flutter/screens/text_session_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -29,8 +30,14 @@ Future<void> main() async {
     // For iOS: App Attest with DeviceCheck fallback, for Android: Play Integrity.
     try {
       await FirebaseAppCheck.instance.activate(
-        appleProvider: AppleProvider.appAttestWithDeviceCheckFallback,
-        androidProvider: AndroidProvider.playIntegrity,
+        // Debug: use Debug provider (works on Simulator/Test builds).
+        // Release: use DeviceCheck to avoid App Attest entitlement issues on TestFlight
+        // until App Attest capability is explicitly configured.
+        appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
+        // appleProvider: AppleProvider.deviceCheck,
+        // Use Debug provider on debug builds to simplify local testing.
+        // Note: add the printed debug token to Firebase Console > App Check.
+        androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
       );
       // ignore: avoid_print
       print('[BOOT] Firebase App Check activated');
@@ -38,6 +45,16 @@ Future<void> main() async {
       // ignore: avoid_print
       print('[BOOT][WARN] App Check activation failed: $e');
     }
+    // Ensure RevenueCat is configured BEFORE any Purchases API calls
+    // to avoid: "Purchases has not been configured" crash.
+    try {
+      await PremiumService.instance.ensureConfigured();
+    } catch (e) {
+      // ignore: avoid_print
+      print('[BOOT][WARN] RevenueCat init failed: $e');
+    }
+
+    // Now sign in to Firebase and link RevenueCat app user id
     try {
       final auth = FirebaseAuth.instance;
       if (auth.currentUser == null) {
@@ -74,13 +91,6 @@ Future<void> main() async {
   } catch (e) {
     // ignore: avoid_print
     print('[BOOT][WARN] Firebase init failed: $e');
-  }
-  // Configure RevenueCat (non-fatal if keys are missing)
-  try {
-    await PremiumService.instance.ensureConfigured();
-  } catch (e) {
-    // ignore: avoid_print
-    print('[BOOT][WARN] RevenueCat init failed: $e');
   }
   runApp(const VoiceCheckApp());
 }

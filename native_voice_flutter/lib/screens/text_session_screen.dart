@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:native_voice_flutter/services/premium_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:native_voice_flutter/screens/premium_bottom_sheet.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class TextSessionScreen extends StatefulWidget {
   const TextSessionScreen({super.key});
@@ -130,6 +131,12 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
   void _generateAudio() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
+    // Quick network check to avoid making remote calls when offline.
+    // We keep this lightweight and user-friendly: show a one-line snackbar.
+    final hasNetwork = await _ensureNetworkAvailable();
+    if (!hasNetwork) {
+      return;
+    }
     try {
       debugPrint('[UI] Request TTS: lang=${_settings.language}, gender=${_settings.gender}, len=${text.length}');
       // Ensure session id
@@ -179,6 +186,24 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
     } catch (e) {
       debugPrint('[UI][ERROR] TTS generation failed: $e');
       // No SnackBar in failure either; rely on console logs
+    }
+  }
+
+  Future<bool> _ensureNetworkAvailable() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      final online = result != ConnectivityResult.none;
+      if (!online) {
+        if (!mounted) return false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ネットワーク接続がありません。接続をオンにしてください。')),
+        );
+      }
+      return online;
+    } catch (e) {
+      // If we cannot determine, be conservative and proceed; downstream will fail fast.
+      debugPrint('[NET][WARN] Connectivity check failed: $e');
+      return true;
     }
   }
 
@@ -242,6 +267,13 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
           if (!mounted) return;
           await _showTokenLimitDialog();
         }
+      } else if (e is FirebaseFunctionsException &&
+          (e.code == 'unavailable' || e.code == 'deadline-exceeded')) {
+        // Transient network/server issue: show quick hint. No retries loop.
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ネットワークに接続できませんでした。接続を確認してから再試行してください。')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -534,6 +566,9 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              // Preset samples (only when editor is empty)
+              _buildSamplePresets(context),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   IconButton(
@@ -625,6 +660,159 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Simple view model for a preset card
+class _SampleCardData {
+  final String title;
+  final String subtitle;
+  final String body;
+  const _SampleCardData({required this.title, required this.subtitle, required this.body});
+}
+
+extension on _TextSessionScreenState {
+  // Build horizontally scrollable preset cards when the text box is empty
+  Widget _buildSamplePresets(BuildContext context) {
+    final textEmpty = _textController.text.trim().isEmpty;
+    if (!textEmpty) return const SizedBox.shrink();
+
+    final lang = _settings.language; // e.g., en-US
+    final locale = Localizations.localeOf(context);
+    final isJaUi = locale.languageCode.toLowerCase() == 'ja';
+    final presets = _presetsFor(lang, isJaUi);
+    if (presets.isEmpty) return const SizedBox.shrink();
+
+    final surface = Theme.of(context).colorScheme.surface;
+    return SizedBox(
+      height: 84,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            const SizedBox(width: 2),
+            for (final p in presets)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _textController.text = p.body;
+                      _textController.selection = TextSelection.collapsed(offset: p.body.length);
+                    });
+                    _scheduleSaveSession();
+                  },
+                  child: Container(
+                    width: 240,
+                    height: 84,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          p.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          p.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white60),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(width: 2),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Returns three presets for supported languages; otherwise empty
+  List<_SampleCardData> _presetsFor(String languageCode, bool isJaUi) {
+    String t(String ja, String en) => isJaUi ? ja : en;
+
+    // Normalize into language family we support
+    String fam;
+    if (languageCode.startsWith('en-')) {
+      fam = 'en';
+    } else if (languageCode == 'ja-JP') {
+      fam = 'ja';
+    } else if (languageCode == 'zh-CN' || languageCode == 'zh-TW') {
+      fam = 'zh';
+    } else if (languageCode == 'fr-FR') {
+      fam = 'fr';
+    } else if (languageCode == 'ko-KR') {
+      fam = 'ko';
+    } else if (languageCode == 'de-DE') {
+      fam = 'de';
+    } else if (languageCode == 'es-ES') {
+      fam = 'es';
+    } else {
+      return const [];
+    }
+
+    // Bodies per family
+    final intro = <String, String>{
+      'en': 'Hello, my name is Alex. I work as a product manager in a software company. In my free time I enjoy running and cooking. Nice to meet you.',
+      'ja': 'はじめまして、アレックスと申します。ソフトウェア企業でプロダクトマネージャーをしています。休日はランニングと料理を楽しんでいます。よろしくお願いします。',
+      'zh': '大家好，我叫亚历克斯。在一家软件公司做产品经理。空闲时间我喜欢跑步和做饭。请多多指教。',
+      'fr': 'Bonjour, je m’appelle Alex. Je suis chef de produit dans une entreprise de logiciels. Pendant mon temps libre, j’aime courir et cuisiner. Enchanté.',
+      'ko': '안녕하세요, 저는 알렉스입니다. 소프트웨어 회사에서 프로덕트 매니저로 일하고 있습니다. 여가 시간에는 달리기와 요리를 즐깁니다. 잘 부탁드립니다.',
+      'de': 'Hallo, ich heiße Alex. Ich arbeite als Product Manager in einem Softwareunternehmen. In meiner Freizeit laufe ich gerne und koche. Freut mich, Sie kennenzulernen.',
+      'es': 'Hola, me llamo Alex. Trabajo como gerente de producto en una empresa de software. En mi tiempo libre me gusta correr y cocinar. Mucho gusto.',
+    }[fam]!;
+
+    final news = <String, String>{
+      'en': 'Yesterday, the government proposed a new budget reform aimed at boosting local innovation. Analysts say the plan may face resistance in the upper house, but a final vote is expected next week.',
+      'ja': '昨日、政府は地域のイノベーション促進を目的とした新たな予算改革案を発表した。専門家は参議院での抵抗が予想されるとしつつも、採決は来週にも行われる見通しだという。',
+      'zh': '昨天，政府提出了新的预算改革方案，旨在促进本地创新。分析人士表示，该计划可能在上议院遭到阻力，但预计下周进行最终表决。',
+      'fr': 'Hier, le gouvernement a présenté une réforme budgétaire visant à stimuler l’innovation locale. Les analystes estiment que le projet pourrait rencontrer des résistances au Sénat, mais un vote final est attendu la semaine prochaine.',
+      'ko': '어제 정부는 지역 혁신을 촉진하기 위한 새로운 예산 개혁안을 제안했다. 전문가들은 상원에서 반대에 부딪힐 수 있다고 보면서도, 최종 표결은 다음 주에 이뤄질 것으로 전망했다.',
+      'de': 'Gestern schlug die Regierung eine neue Haushaltsreform vor, um lokale Innovationen zu fördern. Analysten sagen, der Plan könnte im Oberhaus auf Widerstand stoßen, eine endgültige Abstimmung wird jedoch nächste Woche erwartet.',
+      'es': 'Ayer, el gobierno propuso una nueva reforma presupuestaria para impulsar la innovación local. Analistas señalan que el plan podría enfrentar resistencia en el Senado, pero se espera una votación final la próxima semana.',
+    }[fam]!;
+
+    final pitch = <String, String>{
+      'en': 'Thank you for joining today. I will present our Q4 plan focusing on customer retention. We will roll out onboarding improvements and a native pronunciation guide to support global teams.',
+      'ja': '本日はご参加ありがとうございます。第4四半期の計画として、顧客維持にフォーカスした施策をご説明します。オンボーディング改善と、グローバルチームを支えるネイティブ発音ガイドを順次展開します。',
+      'zh': '感谢各位今天参加。我将介绍我们第四季度的计划，重点放在客户留存。我们将推出入门流程优化，以及面向全球团队的本地化发音指南。',
+      'fr': 'Merci d’être présents aujourd’hui. Je vais présenter notre plan du T4 axé sur la rétention client. Nous déploierons des améliorations d’onboarding et un guide de prononciation native pour accompagner nos équipes internationales.',
+      'ko': '오늘 참석해 주셔서 감사합니다. 4분기 계획은 고객 유지에 초점을 맞추겠습니다. 온보딩 개선과 글로벌 팀을 위한 네이티브 발음 가이드를 순차적으로 도입하겠습니다.',
+      'de': 'Vielen Dank, dass Sie heute dabei sind. Ich präsentiere unseren Q4‑Plan mit Fokus auf Kundenbindung. Wir führen Verbesserungen beim Onboarding sowie einen Leitfaden für native Aussprache zur Unterstützung globaler Teams ein.',
+      'es': 'Gracias por acompañarnos hoy. Presentaré nuestro plan del cuarto trimestre centrado en la retención de clientes. Implementaremos mejoras de onboarding y una guía de pronunciación nativa para apoyar a los equipos globales.',
+    }[fam]!;
+
+    return [
+      _SampleCardData(
+        title: t('自己紹介する', 'Introduce yourself'),
+        subtitle: t('日常会話に慣れよう', 'Get comfortable with small talk'),
+        body: intro,
+      ),
+      _SampleCardData(
+        title: t('ニュース記事', 'News article'),
+        subtitle: t('昨日の政治ニュース', 'Yesterday’s political news'),
+        body: news,
+      ),
+      _SampleCardData(
+        title: t('プレゼン原稿', 'Presentation script'),
+        subtitle: t('ネイティブの発音を確認', 'Check native pronunciation'),
+        body: pitch,
+      ),
+    ];
   }
 }
 

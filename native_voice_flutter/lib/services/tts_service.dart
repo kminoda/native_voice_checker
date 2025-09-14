@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 
 class TtsRequest {
   TtsRequest({
@@ -46,7 +47,7 @@ class TtsService {
       }
     }
 
-    if (useMock || Firebase.apps.isEmpty) {
+    if (useMock) {
       // In mock mode, just write a tiny file placeholder to simulate an mp3
       final file = req.targetPath != null
           ? File(req.targetPath!)
@@ -78,15 +79,33 @@ class TtsService {
       data = await invoke();
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'unauthenticated') {
-        debugPrint('[TTS][INFO] Unauthenticated. Trying anonymous sign-in then retry.');
+        debugPrint('[TTS][INFO] Unauthenticated. Ensuring Auth + App Check then retry.');
+        // 1) Ensure signed in
         try {
           final auth = FirebaseAuth.instance;
           if (auth.currentUser == null) {
             await auth.signInAnonymously();
+            debugPrint('[TTS][INFO] Signed in anonymously');
           }
         } catch (e2) {
-          debugPrint('[TTS][WARN] Anonymous sign-in retry failed: $e2');
+          debugPrint('[TTS][WARN] Anonymous sign-in failed: $e2');
         }
+        // 2) Force-refresh App Check token (common cause of unauthenticated when enforceAppCheck=true)
+        try {
+          final token = await FirebaseAppCheck.instance.getToken(true);
+          debugPrint('[TTS][INFO] App Check token refreshed: ${token != null ? 'ok' : 'null'}');
+        } catch (e3) {
+          debugPrint('[TTS][WARN] App Check token refresh failed: $e3');
+        }
+        // 3) Force-refresh Auth ID token so Functions attaches latest
+        try {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            await user.getIdToken(true);
+          }
+        } catch (_) {}
+        // Small delay to allow tokens to settle
+        await Future<void>.delayed(const Duration(milliseconds: 150));
         // retry once
         data = await invoke();
       } else {
