@@ -4,6 +4,8 @@ import 'package:native_voice_flutter/screens/text_session_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:native_voice_flutter/services/premium_service.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:native_voice_flutter/l10n/app_localizations.dart';
@@ -23,15 +25,47 @@ Future<void> main() async {
     await Firebase.initializeApp();
     // ignore: avoid_print
     print('[BOOT] Firebase.initializeApp() completed');
+    // App Check helps ensure only genuine app instances call your backend.
+    // For iOS: App Attest with DeviceCheck fallback, for Android: Play Integrity.
+    try {
+      await FirebaseAppCheck.instance.activate(
+        appleProvider: AppleProvider.appAttestWithDeviceCheckFallback,
+        androidProvider: AndroidProvider.playIntegrity,
+      );
+      // ignore: avoid_print
+      print('[BOOT] Firebase App Check activated');
+    } catch (e) {
+      // ignore: avoid_print
+      print('[BOOT][WARN] App Check activation failed: $e');
+    }
     try {
       final auth = FirebaseAuth.instance;
       if (auth.currentUser == null) {
         final cred = await auth.signInAnonymously();
         // ignore: avoid_print
         print('[BOOT] Signed in anonymously: uid=${cred.user?.uid}');
+        // Link RevenueCat app user id to Firebase UID for server/webhook correlation
+        try {
+          final uid = cred.user?.uid;
+          if (uid != null) {
+            await Purchases.logIn(uid);
+          }
+        } catch (e) {
+          // ignore: avoid_print
+          print('[BOOT][WARN] RevenueCat logIn failed: $e');
+        }
       } else {
         // ignore: avoid_print
         print('[BOOT] Already signed in: uid=${auth.currentUser?.uid}');
+        try {
+          final uid = auth.currentUser?.uid;
+          if (uid != null) {
+            await Purchases.logIn(uid);
+          }
+        } catch (e) {
+          // ignore: avoid_print
+          print('[BOOT][WARN] RevenueCat logIn failed: $e');
+        }
       }
     } catch (e) {
       // ignore: avoid_print

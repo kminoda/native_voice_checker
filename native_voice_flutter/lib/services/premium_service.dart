@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'revenuecat_keys.dart';
 
@@ -53,6 +55,46 @@ class PremiumService extends ChangeNotifier {
     if (_isPremium != hasAnyEntitlement) {
       _isPremium = hasAnyEntitlement;
       notifyListeners();
+      // Best-effort: sync plan state to backend so Functions can honor premium
+      // even if webhook lag exists. This trusts client state; pair with server webhook.
+      _syncPlanToBackend(hasAnyEntitlement);
+    }
+  }
+
+  /// Public helper to push current premium state to backend.
+  ///
+  /// This improves UX by reducing the window where the backend still thinks
+  /// the user is on the free plan. Always pair with server-side verification
+  /// (RevenueCat webhook) for authoritative state.
+  Future<void> syncPlanNow({bool refreshEntitlementsFirst = false}) async {
+    try {
+      await ensureConfigured();
+      if (refreshEntitlementsFirst) {
+        try {
+          final info = await Purchases.getCustomerInfo();
+          _applyCustomerInfo(info); // triggers backend sync if state changed
+        } catch (_) {}
+      }
+      await _syncPlanToBackend(_isPremium);
+    } catch (e) {
+      debugPrint('[Premium][WARN] syncPlanNow failed: $e');
+    }
+  }
+
+  Future<void> _syncPlanToBackend(bool isPremium) async {
+    try {
+      if (Firebase.apps.isEmpty) {
+        try {
+          await Firebase.initializeApp();
+        } catch (_) {
+          return; // Cannot sync without Firebase
+        }
+      }
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('syncPremiumPlan');
+      await callable.call(<String, dynamic>{'isPremium': isPremium});
+    } catch (e) {
+      debugPrint('[Premium][WARN] syncPlanToBackend failed: $e');
     }
   }
 

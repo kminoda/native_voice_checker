@@ -203,14 +203,79 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
       _scheduleSaveSession();
     } catch (e) {
       debugPrint('[UI][ERROR] Generation failed in _performGeneration: $e');
-      // Show premium upsell when free token limit is exceeded
+      // If free user hits token cap, show upsell. If premium locally but server
+      // still thinks free (sync lag), try one-time resync + retry.
       if (e is FirebaseFunctionsException && e.code == 'resource-exhausted') {
-        if (!mounted) return;
-        await _showTokenLimitDialog();
+        if (_premium.isPremium) {
+          debugPrint('[UI] Local premium but server returned resource-exhausted. Attempting resync + retry.');
+          try {
+            // Refresh RC state then push plan to backend
+            await _premium.syncPlanNow(refreshEntitlementsFirst: true);
+          } catch (_) {}
+          // One-time retry
+          try {
+            final res = await _tts.generate(
+              TtsRequest(
+                text: text,
+                languageCode: _settings.language,
+                gender: _settings.gender.toUpperCase() == 'MALE' ? 'MALE' : 'FEMALE',
+                targetPath: targetPath,
+              ),
+            );
+            _audioPath = res.filePath;
+            if (_player.playing) {
+              await _player.stop();
+            }
+            await _player.setFilePath(_audioPath!);
+            debugPrint('[UI] Audio file set to player after retry: path=${_audioPath!}');
+            setState(() => _hasAudio = true);
+            _scheduleSaveSession();
+            return; // success after retry
+          } catch (e2) {
+            debugPrint('[UI][WARN] Retry after resync failed: $e2');
+            // Fall through to dialog for guidance
+            if (!mounted) return;
+            await _showPremiumSyncFailedDialog();
+            return;
+          }
+        } else {
+          if (!mounted) return;
+          await _showTokenLimitDialog();
+        }
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
     }
+  }
+
+  Future<void> _showPremiumSyncFailedDialog() async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text(l10n.tokenLimitTitle),
+        content: Text(
+          // Keep copy simple: premiumなのに失敗 → 復元/再同期の提案
+          'Your premium status could not be synced yet. Try restoring purchases or retry shortly.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.close),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              HapticFeedback.selectionClick();
+              await _premium.restore();
+            },
+            child: const Text('Restore & Retry'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showTokenLimitDialog() async {

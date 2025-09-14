@@ -48,5 +48,9 @@
     <!-- Google AdMob Application ID -->
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-5083707284208912~9987089392</string>
+    
+    <!-- Privacy: Microphone Usage Description -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app uses the microphone to record your voice for pronunciation checking and feedback.</string>
 </dict>
 </plist>
