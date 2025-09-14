@@ -9,6 +9,8 @@ import 'package:native_voice_flutter/screens/settings_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
+import 'package:native_voice_flutter/ui/review_prompt.dart';
+import 'package:native_voice_flutter/services/review_tracker.dart';
 
 class MenuDrawer extends StatefulWidget {
   const MenuDrawer({
@@ -28,12 +30,9 @@ class _MenuDrawerState extends State<MenuDrawer> {
   final TextEditingController _searchController = TextEditingController();
   final SessionStore _store = SessionStore();
   String _query = '';
-  // Rating destinations
-  final Uri _reviewFormUri = Uri.parse('https://forms.gle/d6kMNCHZ9hfG9saF7');
-  // App Store review deep link (Japan store)
-  final Uri _appStoreReviewUri = Uri.parse('https://apps.apple.com/jp/app/id6752515948?action=write-review');
   final Uri _ankiAppUri = Uri.parse('https://apps.apple.com/jp/app/id6740526880');
   final PremiumService _premium = PremiumService.instance;
+  final ReviewTracker _reviewTracker = ReviewTracker();
 
   Future<void> _createNewSession() async {
     final id = 'session_${DateTime.now().millisecondsSinceEpoch}';
@@ -221,22 +220,9 @@ class _MenuDrawerState extends State<MenuDrawer> {
                             ),
                             onTap: () async {
                               HapticFeedback.selectionClick();
-                              final rating = await _showRatingDialog();
-                              if (rating == null) return;
-                              final Uri dest = rating <= 3 ? _reviewFormUri : _appStoreReviewUri;
-                              try {
-                                final ok = await launchUrl(dest, mode: LaunchMode.externalApplication);
-                                if (!ok) {
-                                  // ignore: use_build_context_synchronously
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
-                                  );
-                                }
-                              } catch (_) {
-                                // ignore: use_build_context_synchronously
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(AppLocalizations.of(context)!.openLinkFailed)),
-                                );
+                              final rated = await showReviewFlow(context);
+                              if (rated) {
+                                await _reviewTracker.markReviewed();
                               }
                             },
                           ),
@@ -267,56 +253,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
     );
   }
 
-  Future<int?> _showRatingDialog() async {
-    int selected = 0;
-    return showDialog<int>(
-      context: context,
-      builder: (context) {
-        final isJa = Localizations.localeOf(context).languageCode == 'ja';
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            title: Text(
-              isJa ? 'アプリを評価する' : 'Rate the App',
-            ),
-            content: SizedBox(
-              width: 320,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (i) {
-                      final idx = i + 1;
-                      final filled = selected >= idx;
-                      return IconButton(
-                        iconSize: 32,
-                        onPressed: () {
-                          setState(() => selected = idx);
-                          Navigator.of(context).pop(idx);
-                        },
-                        icon: Icon(
-                          filled ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: filled ? Colors.amber : Colors.white70,
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(AppLocalizations.of(context)!.cancel),
-              ),
-              // No explicit submit; tapping a star acts immediately.
-            ],
-          ),
-        );
-      },
-    );
-  }
+  // Review dialog is provided by shared UI in ui/review_prompt.dart
 
   Future<void> _showActions(SessionData s) async {
     if (!mounted) return;

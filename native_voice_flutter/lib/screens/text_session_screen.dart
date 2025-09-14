@@ -17,6 +17,8 @@ import 'package:native_voice_flutter/services/premium_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:native_voice_flutter/screens/premium_bottom_sheet.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:native_voice_flutter/services/review_tracker.dart';
+import 'package:native_voice_flutter/ui/review_prompt.dart';
 
 class TextSessionScreen extends StatefulWidget {
   const TextSessionScreen({super.key});
@@ -43,6 +45,7 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
   bool _isLoadingAd = false;
   final Random _rand = Random();
   final PremiumService _premium = PremiumService.instance;
+  final ReviewTracker _reviewTracker = ReviewTracker();
   // Ad unit IDs (prod and Google-provided test unit)
   static const String _interstitialUnitIdProd = 'ca-app-pub-5083707284208912/4312090887';
   static const String _interstitialUnitIdTest = 'ca-app-pub-3940256099942544/4411468910';
@@ -226,6 +229,21 @@ class _TextSessionScreenState extends State<TextSessionScreen> {
       debugPrint('[UI] Audio file set to player: path=${_audioPath!}');
       setState(() => _hasAudio = true);
       _scheduleSaveSession();
+
+      // Count successful generations and maybe show review prompt
+      try {
+        await _reviewTracker.incrementGeneration();
+        if (await _reviewTracker.shouldPrompt()) {
+          if (mounted) {
+            final rated = await showReviewFlow(context);
+            if (rated) {
+              await _reviewTracker.markReviewed();
+            } else {
+              await _reviewTracker.markPrompted();
+            }
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('[UI][ERROR] Generation failed in _performGeneration: $e');
       // If free user hits token cap, show upsell. If premium locally but server
