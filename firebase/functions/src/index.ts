@@ -20,7 +20,7 @@ try {
 }
 
 const USERS_COLLECTION = "users";
-const FREE_PLAN_MAX_TOKENS = 1000; // default cap
+const FREE_PLAN_MAX_TOKENS = 3000; // default cap
 
 function estimateTokens(text: string): number {
   // Simple approximation: count characters. Works for multi-byte languages too.
