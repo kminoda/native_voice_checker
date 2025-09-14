@@ -13,7 +13,7 @@ export const GOOGLE_LANGUAGE_MAP: Record<string, {
   // English (US)
   "en-US": {
     code: "en-US",
-    maleVoice: "en-US-Neural2-B",
+    maleVoice: "en-US-Neural2-A",
     femaleVoice: "en-US-Neural2-F",
   },
   // English (UK)
